@@ -1,0 +1,523 @@
+{% extends "base.html" %}
+{% block title %}Szerelde térkép{% endblock %}
+{% block page_title %}Komissiózó kocsi nyomonkövetés – Szerelde alaprajz{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addCartModal">
+  <i class="bi bi-plus-lg me-1"></i>Kocsi felvétele
+</button>
+<button class="btn btn-sm btn-outline-secondary" onclick="loadFloorPlan()">
+  <i class="bi bi-arrow-clockwise me-1"></i>Frissít
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- KPI bar -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center py-2">
+      <div class="fw-bold fs-4 text-danger" id="kpi-hatralekos">–</div>
+      <div class="text-muted small"><i class="bi bi-hourglass me-1"></i>Hátralékos</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center py-2">
+      <div class="fw-bold fs-4 text-warning" id="kpi-aktiv">–</div>
+      <div class="text-muted small"><i class="bi bi-activity me-1"></i>Aktív (szereldén)</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center py-2">
+      <div class="fw-bold fs-4 text-success" id="kpi-kesz">–</div>
+      <div class="text-muted small"><i class="bi bi-check-circle me-1"></i>Kész</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center py-2">
+      <div class="fw-bold fs-4 text-primary" id="kpi-total">–</div>
+      <div class="text-muted small"><i class="bi bi-cart me-1"></i>Összes kocsi</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Floor plan -->
+  <div class="col-xl-9">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Szerelde alaprajz – élő pozíciók</h6>
+        <div class="d-flex gap-2 align-items-center small text-muted">
+          <span class="badge bg-primary-subtle text-primary px-2">HÁTRALÉKOS</span>
+          <span class="badge bg-warning-subtle text-warning px-2">JD 4270</span>
+          <span class="badge bg-orange-subtle text-orange px-2" style="background:#fef3c7;color:#92400e">KSR 4392</span>
+          <span class="badge bg-success-subtle text-success px-2">KÉSZ</span>
+          <span class="badge bg-secondary-subtle text-secondary px-2">🔴 RFID HK olvasó</span>
+        </div>
+      </div>
+      <div class="card-body p-2">
+        <div style="overflow-x:auto">
+          <svg id="floor-svg" viewBox="0 0 960 480" style="width:100%;min-width:700px;font-family:system-ui,sans-serif" xmlns="http://www.w3.org/2000/svg">
+
+            <!-- ═══ HÁTTÉR ══════════════════════════════════════════════════════ -->
+            <rect width="960" height="480" fill="#f8fafc" rx="8"/>
+
+            <!-- ═══ HÁTRALÉKOS ZÓNA (KÉK) ═════════════════════════════════════ -->
+            <rect x="0" y="0" width="88" height="480" fill="#dbeafe" rx="4" opacity="0.8"/>
+            <rect x="2" y="2" width="84" height="476" fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="6,3" rx="3"/>
+            <text x="44" y="160" text-anchor="middle" font-size="11" fill="#1d4ed8" font-weight="700" transform="rotate(-90,44,160)">HÁTRALÉKOS KOCSIK</text>
+            <text x="44" y="310" text-anchor="middle" font-size="10" fill="#3b82f6" id="hatralekos-count">(0 db)</text>
+            <!-- Kocsi ikonok hátralékos területen -->
+            <g id="hatralekos-carts"></g>
+
+            <!-- ═══ 4270 JD SZERELDE SOR (FELSŐ) ══════════════════════════════ -->
+            <rect x="90" y="55" width="870" height="175" fill="#eff6ff" rx="6" stroke="#93c5fd" stroke-width="1.5"/>
+            <text x="540" y="76" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="800" letter-spacing="0.5">4270 JOHN DEERE FUTÓMŰ SZERELDE</text>
+
+            <!-- JD Állások -->
+            <!-- 1423 --><rect x="92"  y="82" width="118" height="140" fill="white" rx="5" stroke="#bfdbfe" stroke-width="1.5" class="pos-cell" id="pos-1423" data-pos="1423" style="cursor:pointer"/>
+            <text x="151" y="100" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="700" class="pos-label">1423</text>
+            <!-- 1424 --><rect x="213" y="82" width="118" height="140" fill="white" rx="5" stroke="#bfdbfe" stroke-width="1.5" class="pos-cell" id="pos-1424" data-pos="1424" style="cursor:pointer"/>
+            <text x="272" y="100" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="700" class="pos-label">1424</text>
+            <!-- 1425 + Raktár --><rect x="334" y="82" width="118" height="140" fill="#f3e8ff" rx="5" stroke="#c4b5fd" stroke-width="1.5" class="pos-cell" id="pos-1425" data-pos="1425" style="cursor:pointer"/>
+            <text x="393" y="100" text-anchor="middle" font-size="11" fill="#7c3aed" font-weight="700" class="pos-label">1425 / RAKTÁR</text>
+            <!-- 1426 --><rect x="455" y="82" width="118" height="140" fill="white" rx="5" stroke="#bfdbfe" stroke-width="1.5" class="pos-cell" id="pos-1426" data-pos="1426" style="cursor:pointer"/>
+            <text x="514" y="100" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="700" class="pos-label">1426</text>
+            <!-- 1427 --><rect x="576" y="82" width="118" height="140" fill="white" rx="5" stroke="#bfdbfe" stroke-width="1.5" class="pos-cell" id="pos-1427" data-pos="1427" style="cursor:pointer"/>
+            <text x="635" y="100" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="700" class="pos-label">1427</text>
+            <!-- 1428 --><rect x="697" y="82" width="118" height="140" fill="white" rx="5" stroke="#bfdbfe" stroke-width="1.5" class="pos-cell" id="pos-1428" data-pos="1428" style="cursor:pointer"/>
+            <text x="756" y="100" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="700" class="pos-label">1428</text>
+            <!-- 1429 --><rect x="818" y="82" width="140" height="140" fill="white" rx="5" stroke="#bfdbfe" stroke-width="1.5" class="pos-cell" id="pos-1429" data-pos="1429" style="cursor:pointer"/>
+            <text x="888" y="100" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="700" class="pos-label">1429</text>
+
+            <!-- ═══ FOLYOSÓ ════════════════════════════════════════════════════ -->
+            <rect x="90" y="232" width="870" height="50" fill="#f1f5f9" rx="3" stroke="#e2e8f0" stroke-width="1"/>
+            <text x="540" y="262" text-anchor="middle" font-size="10" fill="#94a3b8" letter-spacing="2">· · · · · FOLYOSÓ / TRANZIT · · · · ·</text>
+            <g id="folyoso-carts"></g>
+
+            <!-- ═══ 4392 KSR SZERELDE SOR (ALSÓ) ══════════════════════════════ -->
+            <rect x="90" y="284" width="870" height="175" fill="#fffbeb" rx="6" stroke="#fcd34d" stroke-width="1.5"/>
+            <text x="540" y="303" text-anchor="middle" font-size="12" fill="#92400e" font-weight="800" letter-spacing="0.5">4392 KÖZÉPSOROZATÚ FUTÓMŰ SZERELDE</text>
+
+            <!-- KSR Állások -->
+            <!-- 1323 --><rect x="92"  y="308" width="105" height="140" fill="white" rx="5" stroke="#fde68a" stroke-width="1.5" class="pos-cell" id="pos-1323" data-pos="1323" style="cursor:pointer"/>
+            <text x="144" y="326" text-anchor="middle" font-size="11" fill="#92400e" font-weight="700" class="pos-label">1323</text>
+            <!-- 1324 --><rect x="200" y="308" width="105" height="140" fill="white" rx="5" stroke="#fde68a" stroke-width="1.5" class="pos-cell" id="pos-1324" data-pos="1324" style="cursor:pointer"/>
+            <text x="253" y="326" text-anchor="middle" font-size="11" fill="#92400e" font-weight="700" class="pos-label">1324</text>
+            <!-- 1325 --><rect x="308" y="308" width="105" height="140" fill="white" rx="5" stroke="#fde68a" stroke-width="1.5" class="pos-cell" id="pos-1325" data-pos="1325" style="cursor:pointer"/>
+            <text x="361" y="326" text-anchor="middle" font-size="11" fill="#92400e" font-weight="700" class="pos-label">1325</text>
+            <!-- 1326 --><rect x="416" y="308" width="105" height="140" fill="white" rx="5" stroke="#fde68a" stroke-width="1.5" class="pos-cell" id="pos-1326" data-pos="1326" style="cursor:pointer"/>
+            <text x="469" y="326" text-anchor="middle" font-size="11" fill="#92400e" font-weight="700" class="pos-label">1326</text>
+            <!-- 1327 --><rect x="524" y="308" width="105" height="140" fill="white" rx="5" stroke="#fde68a" stroke-width="1.5" class="pos-cell" id="pos-1327" data-pos="1327" style="cursor:pointer"/>
+            <text x="577" y="326" text-anchor="middle" font-size="11" fill="#92400e" font-weight="700" class="pos-label">1327</text>
+            <!-- 1328 --><rect x="632" y="308" width="105" height="140" fill="white" rx="5" stroke="#fde68a" stroke-width="1.5" class="pos-cell" id="pos-1328" data-pos="1328" style="cursor:pointer"/>
+            <text x="685" y="326" text-anchor="middle" font-size="11" fill="#92400e" font-weight="700" class="pos-label">1328</text>
+            <!-- 1329 --><rect x="740" y="308" width="105" height="140" fill="white" rx="5" stroke="#fde68a" stroke-width="1.5" class="pos-cell" id="pos-1329" data-pos="1329" style="cursor:pointer"/>
+            <text x="793" y="326" text-anchor="middle" font-size="11" fill="#92400e" font-weight="700" class="pos-label">1329</text>
+            <!-- 1330 --><rect x="848" y="308" width="110" height="140" fill="white" rx="5" stroke="#fde68a" stroke-width="1.5" class="pos-cell" id="pos-1330" data-pos="1330" style="cursor:pointer"/>
+            <text x="903" y="326" text-anchor="middle" font-size="11" fill="#92400e" font-weight="700" class="pos-label">1330</text>
+
+            <!-- ═══ KÉSZ HIDAK (jobb oldal) ════════════════════════════════════ -->
+            <rect x="90" y="461" width="870" height="17" fill="#dcfce7" rx="3" stroke="#86efac" stroke-width="1"/>
+            <text x="540" y="473" text-anchor="middle" font-size="9" fill="#15803d">KÉSZ HIDAK TERÜLET</text>
+            <g id="kesz-carts"></g>
+
+            <!-- ═══ HK RFID OLVASÓK ═════════════════════════════════════════════ -->
+            <!-- Minden olvasó: piros négyzet + szám + vonal a kapuig -->
+
+            <!-- HK01 -->
+            <line x1="115" y1="370" x2="115" y2="390" stroke="#ef4444" stroke-width="2"/>
+            <rect x="95" y="390" width="40" height="24" fill="#ef4444" rx="3" class="hk-reader" id="hk-HK01" data-hk="HK01" style="cursor:pointer"/>
+            <text x="115" y="406" text-anchor="middle" font-size="9" fill="white" font-weight="700" class="hk-label">HK01</text>
+
+            <!-- HK02 -->
+            <line x1="272" y1="82" x2="272" y2="65" stroke="#ef4444" stroke-width="2"/>
+            <rect x="252" y="55" width="40" height="24" fill="#ef4444" rx="3" class="hk-reader" id="hk-HK02" data-hk="HK02" style="cursor:pointer"/>
+            <text x="272" y="71" text-anchor="middle" font-size="9" fill="white" font-weight="700" class="hk-label">HK02</text>
+
+            <!-- HK03 -->
+            <line x1="393" y1="82" x2="393" y2="65" stroke="#ef4444" stroke-width="2"/>
+            <rect x="373" y="55" width="40" height="24" fill="#ef4444" rx="3" class="hk-reader" id="hk-HK03" data-hk="HK03" style="cursor:pointer"/>
+            <text x="393" y="71" text-anchor="middle" font-size="9" fill="white" font-weight="700" class="hk-label">HK03</text>
+
+            <!-- HK04 -->
+            <line x1="514" y1="82" x2="514" y2="55" stroke="#ef4444" stroke-width="2"/>
+            <rect x="494" y="40" width="40" height="24" fill="#ef4444" rx="3" class="hk-reader" id="hk-HK04" data-hk="HK04" style="cursor:pointer"/>
+            <text x="514" y="56" text-anchor="middle" font-size="9" fill="white" font-weight="700" class="hk-label">HK04</text>
+
+            <!-- HK05 -->
+            <line x1="514" y1="232" x2="514" y2="250" stroke="#ef4444" stroke-width="2"/>
+            <rect x="494" y="250" width="40" height="24" fill="#ef4444" rx="3" class="hk-reader" id="hk-HK05" data-hk="HK05" style="cursor:pointer"/>
+            <text x="514" y="266" text-anchor="middle" font-size="9" fill="white" font-weight="700" class="hk-label">HK05</text>
+
+            <!-- HK06 -->
+            <line x1="756" y1="82" x2="756" y2="65" stroke="#ef4444" stroke-width="2"/>
+            <rect x="736" y="55" width="40" height="24" fill="#ef4444" rx="3" class="hk-reader" id="hk-HK06" data-hk="HK06" style="cursor:pointer"/>
+            <text x="756" y="71" text-anchor="middle" font-size="9" fill="white" font-weight="700" class="hk-label">HK06</text>
+
+            <!-- HK07 -->
+            <line x1="940" y1="160" x2="958" y2="160" stroke="#ef4444" stroke-width="2"/>
+            <rect x="920" y="148" width="40" height="24" fill="#ef4444" rx="3" class="hk-reader" id="hk-HK07" data-hk="HK07" style="cursor:pointer"/>
+            <text x="940" y="164" text-anchor="middle" font-size="9" fill="white" font-weight="700" class="hk-label">HK07</text>
+
+            <!-- HK08 -->
+            <line x1="577" y1="308" x2="577" y2="290" stroke="#ef4444" stroke-width="2"/>
+            <rect x="557" y="276" width="40" height="24" fill="#ef4444" rx="3" class="hk-reader" id="hk-HK08" data-hk="HK08" style="cursor:pointer"/>
+            <text x="577" y="292" text-anchor="middle" font-size="9" fill="white" font-weight="700" class="hk-label">HK08</text>
+
+            <!-- HK09 -->
+            <line x1="469" y1="308" x2="469" y2="290" stroke="#ef4444" stroke-width="2"/>
+            <rect x="449" y="276" width="40" height="24" fill="#ef4444" rx="3" class="hk-reader" id="hk-HK09" data-hk="HK09" style="cursor:pointer"/>
+            <text x="469" y="292" text-anchor="middle" font-size="9" fill="white" font-weight="700" class="hk-label">HK09</text>
+
+            <!-- HK10 -->
+            <line x1="253" y1="308" x2="253" y2="290" stroke="#ef4444" stroke-width="2"/>
+            <rect x="233" y="276" width="40" height="24" fill="#ef4444" rx="3" class="hk-reader" id="hk-HK10" data-hk="HK10" style="cursor:pointer"/>
+            <text x="253" y="292" text-anchor="middle" font-size="9" fill="white" font-weight="700" class="hk-label">HK10</text>
+
+            <!-- ═══ Dinamikus kocsi ikonok ─ JS tölti be ═══════════════════════ -->
+            <g id="carts-layer"></g>
+
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Side panel -->
+  <div class="col-xl-3">
+    <!-- HK Olvasók -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent border-0 py-2">
+        <h6 class="mb-0 small"><i class="bi bi-wifi me-2 text-danger"></i>HK RFID Olvasók</h6>
+      </div>
+      <div class="card-body p-0">
+        <div id="hk-status-list" style="max-height:200px;overflow-y:auto"></div>
+      </div>
+    </div>
+
+    <!-- Kocsi lista -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-2">
+        <h6 class="mb-0 small"><i class="bi bi-cart me-2"></i>Kocsik</h6>
+        <select class="form-select form-select-sm w-auto" id="cart-filter" onchange="loadFloorPlan()">
+          <option value="">Mind</option>
+          <option value="hátralékos">Hátralékos</option>
+          <option value="aktív">Aktív</option>
+          <option value="kész">Kész</option>
+        </select>
+      </div>
+      <div class="card-body p-0" id="cart-list" style="max-height:420px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Pozíció kattintás panel -->
+<div id="pos-detail" class="card border-0 shadow-sm mt-3 d-none">
+  <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-semibold" id="pos-detail-title"></h6>
+    <button class="btn-close" onclick="document.getElementById('pos-detail').classList.add('d-none')"></button>
+  </div>
+  <div class="card-body" id="pos-detail-body"></div>
+</div>
+
+<!-- Add cart modal -->
+<div class="modal fade" id="addCartModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Komissiózó kocsi felvétele</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Kocsi szám *</label>
+          <input class="form-control" id="nc-number" placeholder="pl. KOCSI-001"></div>
+        <div class="mb-3"><label class="form-label">Szerelési sor</label>
+          <select class="form-select" id="nc-line">
+            <option value="">– Nem megadott –</option>
+            <option value="4270">4270 John Deere</option>
+            <option value="4392">4392 Középsorozatú</option>
+          </select></div>
+        <div class="mb-3"><label class="form-label">RFID EPC (ha van tag)</label>
+          <input class="form-control" id="nc-rfid" placeholder="pl. E2004..."></div>
+        <div class="mb-3"><label class="form-label">Megjegyzés</label>
+          <textarea class="form-control" id="nc-notes" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="addCart()">Felvétel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Move cart modal -->
+<div class="modal fade" id="moveCartModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="mc-title">Kocsi áthelyezése</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <label class="form-label">Új pozíció</label>
+        <select class="form-select mb-3" id="mc-pos">
+          <option value="HÁTRALÉKOS">HÁTRALÉKOS</option>
+          <option value="RAKTÁR">RAKTÁR</option>
+          <option value="1423">JD – 1423</option>
+          <option value="1424">JD – 1424</option>
+          <option value="1425">JD – 1425</option>
+          <option value="1426">JD – 1426</option>
+          <option value="1427">JD – 1427</option>
+          <option value="1428">JD – 1428</option>
+          <option value="1429">JD – 1429</option>
+          <option value="1323">KSR – 1323</option>
+          <option value="1324">KSR – 1324</option>
+          <option value="1325">KSR – 1325</option>
+          <option value="1326">KSR – 1326</option>
+          <option value="1327">KSR – 1327</option>
+          <option value="1328">KSR – 1328</option>
+          <option value="1329">KSR – 1329</option>
+          <option value="1330">KSR – 1330</option>
+          <option value="KÉSZ">KÉSZ</option>
+        </select>
+        <label class="form-label">Kezelő</label>
+        <input class="form-control" id="mc-op" value="szerelő">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-warning" onclick="doMove()">Áthelyezés</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let floorData = {};
+let selectedCartId = null;
+
+// ── Pozíciók SVG közepei (kocsi ikonok elhelyezéséhez) ────────────────────
+const POS_CENTERS = {
+  "HÁTRALÉKOS": {x:44, y:240},
+  "1423": {x:151, y:152}, "1424": {x:272, y:152}, "1425": {x:393, y:152},
+  "1426": {x:514, y:152}, "1427": {x:635, y:152}, "1428": {x:756, y:152},
+  "1429": {x:888, y:152},
+  "RAKTÁR": {x:393, y:152},
+  "FOLYOSÓ": {x:514, y:257},
+  "1323": {x:144, y:378}, "1324": {x:253, y:378}, "1325": {x:361, y:378},
+  "1326": {x:469, y:378}, "1327": {x:577, y:378}, "1328": {x:685, y:378},
+  "1329": {x:793, y:378}, "1330": {x:903, y:378},
+  "KÉSZ": {x:540, y:470},
+};
+
+// ── Kocsi szín státusz szerint ─────────────────────────────────────────────
+const STATUS_COLOR = {
+  "hátralékos": "#3b82f6",
+  "aktív": "#f59e0b",
+  "kész": "#22c55e",
+  "hiányzik": "#ef4444",
+};
+
+async function loadFloorPlan() {
+  const r = await fetch('/api/carts/floor-plan');
+  floorData = await r.json();
+  renderCarts(floorData);
+  renderHKStatus(floorData.readers);
+  renderCartList(floorData);
+  updateKPIs(floorData.stats);
+}
+
+function updateKPIs(stats) {
+  document.getElementById('kpi-hatralekos').textContent = stats.hátralékos ?? 0;
+  document.getElementById('kpi-aktiv').textContent = stats.aktív ?? 0;
+  document.getElementById('kpi-kesz').textContent = stats.kész ?? 0;
+  document.getElementById('kpi-total').textContent = stats.total ?? 0;
+}
+
+function renderCarts(data) {
+  const layer = document.getElementById('carts-layer');
+  layer.innerHTML = '';
+
+  // Pozíciónként kirajzoljuk a kocsikat
+  for(const [pos, carts] of Object.entries(data.position_map)) {
+    if(!carts.length) continue;
+    const center = POS_CENTERS[pos];
+    if(!center) continue;
+
+    carts.forEach((cart, idx) => {
+      const col = STATUS_COLOR[cart.status] || '#6b7280';
+      // Soronként max 3 kocsi fér el, többlet offset
+      const row = Math.floor(idx / 3);
+      const col_idx = idx % 3;
+      const ox = (col_idx - 1) * 22;
+      const oy = row * 22;
+      const cx = center.x + ox;
+      const cy = center.y - 18 + oy;
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('class', 'cart-icon');
+      g.setAttribute('data-cart-id', cart.id);
+      g.style.cursor = 'pointer';
+      g.innerHTML = `
+        <rect x="${cx-10}" y="${cy-10}" width="20" height="18" fill="${col}" rx="3" opacity="0.9"
+              stroke="${selectedCartId===cart.id?'#1a1a1a':'white'}" stroke-width="${selectedCartId===cart.id?2.5:1}"/>
+        <text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="7.5" fill="white" font-weight="700">${cart.cart_number.replace('KOCSI-','')}</text>`;
+      g.addEventListener('click', () => showCartDetail(cart));
+      layer.appendChild(g);
+    });
+
+    // Számlálő badge a pozíción
+    if(carts.length > 0 && pos !== 'HÁTRALÉKOS') {
+      highlightPosition(pos, carts.length);
+    }
+  }
+
+  // Hátralékos számláló
+  const hCount = (data.position_map['HÁTRALÉKOS'] || []).length;
+  document.getElementById('hatralekos-count').textContent = `(${hCount} db)`;
+}
+
+function highlightPosition(pos, count) {
+  const rect = document.getElementById('pos-' + pos);
+  if(!rect) return;
+  rect.setAttribute('fill', count > 0 ? '#fef9c3' : 'white');
+}
+
+function renderHKStatus(readers) {
+  const list = document.getElementById('hk-status-list');
+  list.innerHTML = readers.map(r => `
+    <div class="d-flex align-items-center gap-2 px-3 py-1 border-bottom" style="font-size:.78rem">
+      <span class="badge ${r.status==='online'?'bg-success':'bg-secondary'}" style="font-size:.65rem;min-width:12px;height:12px;padding:0;border-radius:50%;display:inline-block"></span>
+      <span class="fw-semibold text-danger">${r.id}</span>
+      <span class="text-muted flex-grow-1">${r.name.replace(r.id+' – ','')}</span>
+      <span class="text-muted" style="font-size:.68rem">${r.last_seen ? new Date(r.last_seen).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}) : '–'}</span>
+    </div>`).join('');
+}
+
+function renderCartList(data) {
+  const filter = document.getElementById('cart-filter').value;
+  const all = Object.values(data.position_map).flat();
+  const filtered = filter ? all.filter(c => c.status === filter) : all;
+  const list = document.getElementById('cart-list');
+  list.innerHTML = filtered.length ? filtered.map(c => `
+    <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom cart-list-item"
+         style="cursor:pointer;font-size:.8rem" onclick="showCartDetail(${JSON.stringify(c).replace(/"/g,'&quot;')})">
+      <span style="width:10px;height:10px;border-radius:50%;background:${STATUS_COLOR[c.status]||'#6b7280'};flex-shrink:0"></span>
+      <span class="fw-semibold">${c.cart_number}</span>
+      <span class="text-muted ms-auto">${c.current_position||'–'}</span>
+      <button class="btn btn-xs btn-outline-secondary ms-1" onclick="event.stopPropagation();openMoveModal(${c.id},'${c.cart_number}','${c.current_position}')">
+        <i class="bi bi-arrows-move"></i></button>
+    </div>`).join('') : '<p class="text-muted text-center py-3 mb-0 small">Nincs kocsi</p>';
+}
+
+function showCartDetail(cart) {
+  selectedCartId = cart.id;
+  document.getElementById('pos-detail-title').innerHTML =
+    `<i class="bi bi-cart me-2"></i>${cart.cart_number}
+     <span class="badge ms-2" style="background:${STATUS_COLOR[cart.status]}">${cart.status}</span>`;
+  document.getElementById('pos-detail-body').innerHTML = `
+    <div class="row">
+      <div class="col-md-4">
+        <dl class="row mb-0 small">
+          <dt class="col-5">Pozíció</dt><dd class="col-7"><strong>${cart.current_position||'–'}</strong></dd>
+          <dt class="col-5">RFID EPC</dt><dd class="col-7">${cart.rfid_epc ? `<code>${cart.rfid_epc}</code>` : '–'}</dd>
+          <dt class="col-5">Utolsó HK</dt><dd class="col-7">${cart.last_hk_reader||'–'}</dd>
+          <dt class="col-5">Utoljára látva</dt><dd class="col-7">${cart.last_seen_at ? new Date(cart.last_seen_at).toLocaleString('hu-HU') : '–'}</dd>
+        </dl>
+      </div>
+      <div class="col-md-8">
+        <button class="btn btn-sm btn-warning mb-2" onclick="openMoveModal(${cart.id},'${cart.cart_number}','${cart.current_position||''}')">
+          <i class="bi bi-arrows-move me-1"></i>Kézi áthelyezés
+        </button>
+        <button class="btn btn-sm btn-outline-danger ms-2 mb-2" onclick="deleteCart(${cart.id},'${cart.cart_number}')">
+          <i class="bi bi-trash me-1"></i>Törlés
+        </button>
+      </div>
+    </div>`;
+  document.getElementById('pos-detail').classList.remove('d-none');
+  renderCarts(floorData); // refresh selection highlight
+}
+
+// ── Pozíció kattintás ─────────────────────────────────────────────────────
+document.querySelectorAll('.pos-cell').forEach(el => {
+  el.addEventListener('click', function() {
+    const pos = this.dataset.pos;
+    const carts = (floorData.position_map || {})[pos] || [];
+    document.getElementById('pos-detail-title').textContent = `Állás: ${pos} (${carts.length} kocsi)`;
+    document.getElementById('pos-detail-body').innerHTML = carts.length
+      ? `<div class="d-flex flex-wrap gap-2">${carts.map(c =>
+          `<div class="badge py-2 px-3" style="background:${STATUS_COLOR[c.status]};cursor:pointer"
+               onclick="showCartDetail(${JSON.stringify(c).replace(/"/g,"'")})">
+            ${c.cart_number}
+          </div>`).join('')}</div>`
+      : '<span class="text-muted small">Üres állás</span>';
+    document.getElementById('pos-detail').classList.remove('d-none');
+  });
+});
+
+// ── Kocsi felvétele ───────────────────────────────────────────────────────
+async function addCart() {
+  const params = new URLSearchParams({
+    cart_number: document.getElementById('nc-number').value.trim(),
+    assembly_line: document.getElementById('nc-line').value || '',
+    rfid_epc: document.getElementById('nc-rfid').value || '',
+    notes: document.getElementById('nc-notes').value || '',
+  });
+  if(!document.getElementById('nc-number').value.trim()) {
+    showToast('Kocsi szám kötelező!','danger'); return;
+  }
+  const r = await fetch(`/api/carts/?${params}`, {method:'POST'});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('addCartModal')).hide();
+    showToast('Kocsi felvéve','success');
+    loadFloorPlan();
+  } else { const e=await r.json(); showToast(e.detail||'Hiba!','danger'); }
+}
+
+// ── Kézi áthelyezés ───────────────────────────────────────────────────────
+let moveCartId = null;
+function openMoveModal(id, num, currentPos) {
+  moveCartId = id;
+  document.getElementById('mc-title').textContent = `Áthelyezés: ${num}`;
+  document.getElementById('mc-pos').value = currentPos || 'HÁTRALÉKOS';
+  new bootstrap.Modal(document.getElementById('moveCartModal')).show();
+}
+async function doMove() {
+  if(!moveCartId) return;
+  const params = new URLSearchParams({
+    to_position: document.getElementById('mc-pos').value,
+    operator: document.getElementById('mc-op').value || 'szerelő',
+  });
+  const r = await fetch(`/api/carts/${moveCartId}/move?${params}`, {method:'POST'});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('moveCartModal')).hide();
+    showToast('Kocsi áthelyezve','success');
+    loadFloorPlan();
+  } else { showToast('Hiba!','danger'); }
+}
+
+// ── Kocsi törlése ─────────────────────────────────────────────────────────
+async function deleteCart(id, num) {
+  if(!confirm(`Biztosan törlöd: ${num}?`)) return;
+  await fetch(`/api/carts/${id}`, {method:'DELETE'});
+  document.getElementById('pos-detail').classList.add('d-none');
+  showToast('Kocsi törölve','warning');
+  loadFloorPlan();
+}
+
+// ── WebSocket – élő cart_move események ───────────────────────────────────
+window.onRFIDEvent = function(evt) {
+  if(evt.type === 'cart_move') {
+    showToast(`🛒 ${evt.cart_number}: ${evt.from||'?'} → ${evt.to} ${evt.hk_reader ? '('+evt.hk_reader+')' : ''}`, 'info');
+    loadFloorPlan();
+  }
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────
+loadFloorPlan();
+setInterval(loadFloorPlan, 15000);
+</script>
+
+<style>
+.cart-icon rect { transition: opacity .2s; }
+.cart-icon:hover rect { opacity: 1 !important; filter: brightness(1.1); }
+.pos-cell:hover { filter: brightness(0.96); }
+</style>
+{% endblock %}

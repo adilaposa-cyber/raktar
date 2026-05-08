@@ -22,40 +22,56 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import JSONResponse
 import aiohttp
 
-# ── Raktár konfiguráció ───────────────────────────────────────────────────────
+# ── Szerelde konfiguráció – valódi gyári alaprajz alapján ────────────────────
 ZONES = [
-    {"id": "BEVÉTELEZŐ",   "name": "Bevételező terület",  "color": "#3b82f6", "x": 0,  "y": 0},
-    {"id": "A-TÁROLÓ",     "name": "A Tároló zóna",       "color": "#22c55e", "x": 1,  "y": 0},
-    {"id": "B-TÁROLÓ",     "name": "B Tároló zóna",       "color": "#16a34a", "x": 2,  "y": 0},
-    {"id": "GYÁRTÁS",      "name": "Gyártócsarnok",       "color": "#f59e0b", "x": 0,  "y": 1},
-    {"id": "KOMISSIÓZÓ",   "name": "Komissiózó terület",  "color": "#8b5cf6", "x": 1,  "y": 1},
-    {"id": "KISZÁLLÍTÁS",  "name": "Kiszállítási dok",    "color": "#ef4444", "x": 2,  "y": 1},
+    {"id": "HÁTRALÉKOS",  "name": "Hátralékos kocsik",         "color": "#3b82f6"},
+    {"id": "1423",        "name": "JD 4270 – 1423 állás",      "color": "#2563eb"},
+    {"id": "1424",        "name": "JD 4270 – 1424 állás",      "color": "#2563eb"},
+    {"id": "1425",        "name": "JD 4270 – 1425 / Raktár",   "color": "#7c3aed"},
+    {"id": "1426",        "name": "JD 4270 – 1426 állás",      "color": "#2563eb"},
+    {"id": "1427",        "name": "JD 4270 – 1427 állás",      "color": "#2563eb"},
+    {"id": "1428",        "name": "JD 4270 – 1428 állás",      "color": "#2563eb"},
+    {"id": "1429",        "name": "JD 4270 – 1429 állás",      "color": "#2563eb"},
+    {"id": "FOLYOSÓ",     "name": "Folyosó / tranzit",          "color": "#6b7280"},
+    {"id": "1323",        "name": "KSR 4392 – 1323 állás",     "color": "#d97706"},
+    {"id": "1324",        "name": "KSR 4392 – 1324 állás",     "color": "#d97706"},
+    {"id": "1325",        "name": "KSR 4392 – 1325 állás",     "color": "#d97706"},
+    {"id": "1326",        "name": "KSR 4392 – 1326 állás",     "color": "#d97706"},
+    {"id": "1327",        "name": "KSR 4392 – 1327 állás",     "color": "#d97706"},
+    {"id": "1328",        "name": "KSR 4392 – 1328 állás",     "color": "#d97706"},
+    {"id": "1329",        "name": "KSR 4392 – 1329 állás",     "color": "#d97706"},
+    {"id": "1330",        "name": "KSR 4392 – 1330 állás",     "color": "#d97706"},
+    {"id": "KÉSZ",        "name": "Kész hidak",                 "color": "#22c55e"},
 ]
 
 READERS = [
-    {"id": "SIM-BEVET-01",  "name": "Bevételező kapu",     "zone": "BEVÉTELEZŐ"},
-    {"id": "SIM-A-01",      "name": "A zóna bejárat",       "zone": "A-TÁROLÓ"},
-    {"id": "SIM-B-01",      "name": "B zóna bejárat",       "zone": "B-TÁROLÓ"},
-    {"id": "SIM-GYAR-01",   "name": "Gyártás bejárat",      "zone": "GYÁRTÁS"},
-    {"id": "SIM-KOMM-01",   "name": "Komissiózó bejárat",   "zone": "KOMISSIÓZÓ"},
-    {"id": "SIM-KISZALL-01","name": "Kiszállítási kapu",    "zone": "KISZÁLLÍTÁS"},
+    {"id": "HK01", "name": "HK01 – KSR bal bejárat",    "zone": "1323"},
+    {"id": "HK02", "name": "HK02 – JD 1424 bejárat",    "zone": "1424"},
+    {"id": "HK03", "name": "HK03 – Szereldei raktár",   "zone": "1425"},
+    {"id": "HK04", "name": "HK04 – JD 1426 bejárat",    "zone": "1426"},
+    {"id": "HK05", "name": "HK05 – Középső folyosó",    "zone": "FOLYOSÓ"},
+    {"id": "HK06", "name": "HK06 – JD 1428 bejárat",    "zone": "1428"},
+    {"id": "HK07", "name": "HK07 – JD jobb kijárat",    "zone": "KÉSZ"},
+    {"id": "HK08", "name": "HK08 – KSR 1327 bejárat",   "zone": "1327"},
+    {"id": "HK09", "name": "HK09 – KSR 1326 bejárat",   "zone": "1326"},
+    {"id": "HK10", "name": "HK10 – KSR 1324 bejárat",   "zone": "1324"},
 ]
 
-# Demo forgatókönyv – tipikus raktárfolyamat
+# Demo forgatókönyv – komissiózó kocsi útja a szerelésen
 DEMO_SCENARIO = [
     # (tag_epc, from_zone, to_zone, leírás, delay_mp)
-    ("EPC-RAK001", None,           "BEVÉTELEZŐ",  "Raklap érkezik szállítótól",     2),
-    ("EPC-RAK001", "BEVÉTELEZŐ",   "A-TÁROLÓ",    "Betárolás A zónába",             3),
-    ("EPC-RAK002", None,           "BEVÉTELEZŐ",  "2. raklap érkezik",              2),
-    ("EPC-RAK002", "BEVÉTELEZŐ",   "B-TÁROLÓ",    "Betárolás B zónába",             3),
-    ("EPC-RAK001", "A-TÁROLÓ",     "GYÁRTÁS",     "Raklap kimegy gyártásba",        4),
-    ("EPC-RAK003", None,           "BEVÉTELEZŐ",  "3. raklap érkezik",              2),
-    ("EPC-RAK003", "BEVÉTELEZŐ",   "A-TÁROLÓ",    "Betárolás A zónába",             3),
-    ("EPC-RAK001", "GYÁRTÁS",      "A-TÁROLÓ",    "Visszakerül tárolóba (fázis kész)", 5),
-    ("EPC-RAK002", "B-TÁROLÓ",     "KOMISSIÓZÓ",  "Komissiózásra kivéve",           4),
-    ("EPC-RAK002", "KOMISSIÓZÓ",   "KISZÁLLÍTÁS", "Kiszállításra előkészítve",      3),
-    ("EPC-RAK001", "A-TÁROLÓ",     "KOMISSIÓZÓ",  "Komissiózásra kivéve",           4),
-    ("EPC-RAK001", "KOMISSIÓZÓ",   "KISZÁLLÍTÁS", "Kiszállításra előkészítve",      3),
+    ("EPC-KOCSI001", "HÁTRALÉKOS", "1424",    "KOCSI-001 megérkezett JD 1424 álláshoz (HK02)", 3),
+    ("EPC-KOCSI002", "HÁTRALÉKOS", "1323",    "KOCSI-002 megérkezett KSR 1323 álláshoz (HK01)", 2),
+    ("EPC-KOCSI003", "HÁTRALÉKOS", "1425",    "KOCSI-003 szereldei raktárba megy (HK03)",       3),
+    ("EPC-KOCSI001", "1424",       "1426",    "KOCSI-001 továbblép 1424 → 1426 (HK04)",         4),
+    ("EPC-KOCSI002", "1323",       "1324",    "KOCSI-002 továbblép 1323 → 1324 (HK10)",         3),
+    ("EPC-KOCSI004", "HÁTRALÉKOS", "1427",    "KOCSI-004 JD 1427 álláshoz",                      2),
+    ("EPC-KOCSI001", "1426",       "FOLYOSÓ", "KOCSI-001 folyosón halad (HK05)",                 2),
+    ("EPC-KOCSI001", "FOLYOSÓ",    "1326",    "KOCSI-001 KSR sorba kerül – 1326 (HK09)",         3),
+    ("EPC-KOCSI003", "1425",       "1428",    "KOCSI-003 JD 1428 álláshoz (HK06)",               4),
+    ("EPC-KOCSI002", "1324",       "1325",    "KOCSI-002 továbblép 1325 álláshoz",               3),
+    ("EPC-KOCSI004", "1427",       "1429",    "KOCSI-004 JD 1429 kész területre",                4),
+    ("EPC-KOCSI003", "1428",       "KÉSZ",    "KOCSI-003 kész hidak területére érkezett (HK07)", 3),
 ]
 
 # ── App state ─────────────────────────────────────────────────────────────────

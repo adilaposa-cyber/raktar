@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
 from app import models  # noqa: F401 – registers all models
-from app.routers import articles, pallets, locations, rfid, tasks, receiving, phases, infor_ln
+from app.routers import articles, pallets, locations, rfid, tasks, receiving, phases, infor_ln, carts
 
 
 class ConnectionManager:
@@ -74,6 +74,7 @@ app.include_router(tasks.router,     prefix="/api/tasks",     tags=["Feladatok"]
 app.include_router(receiving.router, prefix="/api/receiving", tags=["Bevételezés"])
 app.include_router(phases.router,    prefix="/api/phases",    tags=["Fázisok"])
 app.include_router(infor_ln.router,  prefix="/api/infor-ln",  tags=["Infor LN"])
+app.include_router(carts.router,     prefix="/api/carts",     tags=["Kocsik"])
 
 
 # ── WebSocket ──────────────────────────────────────────────────────────────────
@@ -127,6 +128,10 @@ async def page_articles(request: Request):
 @app.get("/infor-ln")
 async def page_infor_ln(request: Request):
     return templates.TemplateResponse("infor_ln.html", {"request": request, "page": "infor_ln"})
+
+@app.get("/szerelde")
+async def page_szerelde(request: Request):
+    return templates.TemplateResponse("szerelde.html", {"request": request, "page": "szerelde"})
 
 
 if __name__ == "__main__":

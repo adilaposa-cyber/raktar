@@ -199,6 +199,43 @@ class RFIDEvent(Base):
     processed = Column(Boolean, default=False)
 
 
+class Cart(Base):
+    """Komissiózó kocsi – szereldei nyomonkövetés."""
+    __tablename__ = "carts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cart_number = Column(String(50), unique=True, index=True, nullable=False)
+    rfid_tag_id = Column(Integer, ForeignKey("rfid_tags.id"), nullable=True)
+    assembly_line = Column(String(10))          # "4270" | "4392"
+    current_position = Column(String(30))       # "HÁTRALÉKOS" | "1423" | "RAKTÁR" ...
+    status = Column(String(20), default="hátralékos")  # hátralékos | aktív | kész | hiányzik
+    last_hk_reader = Column(String(10))         # HK01..HK10
+    last_seen_at = Column(DateTime(timezone=True))
+    assigned_operator = Column(String(100))
+    notes = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    rfid_tag = relationship("RFIDTag")
+
+
+class CartMovement(Base):
+    """Kocsi mozgástörténet."""
+    __tablename__ = "cart_movements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cart_id = Column(Integer, ForeignKey("carts.id"))
+    hk_reader = Column(String(10))
+    from_position = Column(String(30))
+    to_position = Column(String(30))
+    moved_at = Column(DateTime(timezone=True), server_default=func.now())
+    operator = Column(String(100))
+    notes = Column(Text)
+
+    cart = relationship("Cart")
+
+
 class InforLNSync(Base):
     __tablename__ = "infor_ln_sync"
 
