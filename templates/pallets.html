@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Raklapok{% endblock %}
+{% block page_title %}Raklapok{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createModal">
+  <i class="bi bi-plus-lg me-1"></i>Új raklap
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="row g-2 align-items-center">
+      <div class="col-md-5">
+        <input type="search" class="form-control form-control-sm" id="search-input"
+               placeholder="Keresés: raklap szám, HU, batch...">
+      </div>
+      <div class="col-md-3">
+        <select class="form-select form-select-sm" id="status-filter">
+          <option value="">Összes állapot</option>
+          <option value="in_storage">Tároló</option>
+          <option value="in_transit">Szállítás</option>
+          <option value="at_receiving">Bevételezés</option>
+          <option value="at_staging">Előkészítő</option>
+          <option value="unknown">Ismeretlen</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-sm btn-outline-secondary w-100" onclick="loadPallets()">
+          <i class="bi bi-search me-1"></i>Szűrés
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Raklap szám</th>
+            <th>Cikk</th>
+            <th>Mennyiség</th>
+            <th>Helye</th>
+            <th>Állapot</th>
+            <th>RFID EPC</th>
+            <th>HU (Infor)</th>
+            <th>Műveletek</th>
+          </tr>
+        </thead>
+        <tbody id="pallets-tbody">
+          <tr><td colspan="8" class="text-center text-muted py-4">
+            <div class="spinner-border spinner-border-sm me-2"></div>Betöltés...
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Create modal -->
+<div class="modal fade" id="createModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Új raklap felvétele</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Raklap szám *</label>
+          <input class="form-control" id="f-pallet-number" placeholder="pl. RAK-2024-001">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Cikk</label>
+          <select class="form-select" id="f-article-id">
+            <option value="">– Válasszon cikket –</option>
+          </select>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-8">
+            <label class="form-label">Mennyiség</label>
+            <input class="form-control" type="number" id="f-quantity" value="0">
+          </div>
+          <div class="col-4">
+            <label class="form-label">Egység</label>
+            <input class="form-control" id="f-unit" value="db">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Infor LN HU</label>
+          <input class="form-control" id="f-hu" placeholder="pl. HU-123456">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Batch szám</label>
+          <input class="form-control" id="f-batch">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Megjegyzés</label>
+          <textarea class="form-control" id="f-notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="createPallet()">Létrehozás</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadPallets() {
+  const search = document.getElementById('search-input').value;
+  const status = document.getElementById('status-filter').value;
+  let url = `/api/pallets/?limit=200`;
+  if(search) url += `&search=${encodeURIComponent(search)}`;
+  if(status) url += `&status=${status}`;
+  const r = await fetch(url);
+  const data = await r.json();
+  const tbody = document.getElementById('pallets-tbody');
+  if(!data.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Nincs raklap</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(p => `
+    <tr>
+      <td><a href="/pallets/${p.id}" class="fw-semibold text-decoration-none">${p.pallet_number}</a></td>
+      <td>${p.article ? `<small class="text-muted d-block">${p.article.article_number}</small>${p.article.name}` : '–'}</td>
+      <td>${p.quantity} ${p.unit}</td>
+      <td>${p.current_location ? `<code>${p.current_location.code}</code>` : '<span class="text-muted">–</span>'}</td>
+      <td>${statusBadge(p.status)}</td>
+      <td>${p.rfid_tag ? `<code class="small">${p.rfid_tag.epc}</code>` : '<span class="text-muted">–</span>'}</td>
+      <td>${p.infor_ln_hu ? `<code>${p.infor_ln_hu}</code>` : '–'}</td>
+      <td>
+        <a href="/pallets/${p.id}" class="btn btn-xs btn-outline-primary me-1"><i class="bi bi-eye"></i></a>
+        <button class="btn btn-xs btn-outline-danger" onclick="deletePallet(${p.id}, '${p.pallet_number}')">
+          <i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`).join('');
+}
+
+async function loadArticles() {
+  const r = await fetch('/api/articles/');
+  const data = await r.json();
+  const sel = document.getElementById('f-article-id');
+  data.forEach(a => {
+    const o = document.createElement('option');
+    o.value = a.id;
+    o.textContent = `${a.article_number} – ${a.name}`;
+    sel.appendChild(o);
+  });
+}
+
+async function createPallet() {
+  const payload = {
+    pallet_number: document.getElementById('f-pallet-number').value.trim(),
+    article_id: document.getElementById('f-article-id').value || null,
+    quantity: parseFloat(document.getElementById('f-quantity').value) || 0,
+    unit: document.getElementById('f-unit').value || 'db',
+    infor_ln_hu: document.getElementById('f-hu').value || null,
+    batch_number: document.getElementById('f-batch').value || null,
+    notes: document.getElementById('f-notes').value || null,
+  };
+  if(!payload.pallet_number) { showToast('Raklap szám kötelező!', 'danger'); return; }
+  const r = await fetch('/api/pallets/', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+    showToast('Raklap létrehozva', 'success');
+    loadPallets();
+  } else {
+    const e = await r.json();
+    showToast(e.detail || 'Hiba!', 'danger');
+  }
+}
+
+async function deletePallet(id, num) {
+  if(!confirm(`Biztosan törlöd a(z) ${num} raklapot?`)) return;
+  await fetch(`/api/pallets/${id}`, {method:'DELETE'});
+  showToast('Raklap törölve', 'warning');
+  loadPallets();
+}
+
+function statusBadge(s) {
+  const map = {in_storage:['success','Tároló'], in_transit:['warning','Úton'], at_receiving:['info','Bevételezés'],
+    at_staging:['primary','Előkészítő'], unknown:['secondary','Ismeretlen']};
+  const [cls, lbl] = map[s] || ['secondary', s];
+  return `<span class="badge bg-${cls}">${lbl}</span>`;
+}
+
+loadPallets();
+loadArticles();
+document.getElementById('search-input').addEventListener('keydown', e => { if(e.key==='Enter') loadPallets(); });
+</script>
+{% endblock %}

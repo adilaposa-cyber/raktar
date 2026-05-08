@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Raktártérkép{% endblock %}
+{% block page_title %}Raktártérkép{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulkModal">
+  <i class="bi bi-grid me-1"></i>Helyek generálása
+</button>
+<button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+  <i class="bi bi-plus-lg me-1"></i>Hely hozzáadása
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Zone filter tabs -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="text-muted me-2">Zóna:</span>
+      <div id="zone-tabs" class="d-flex flex-wrap gap-1"></div>
+      <div class="ms-auto d-flex gap-2 align-items-center small">
+        <span class="legend-dot bg-success"></span>Szabad
+        <span class="legend-dot bg-danger"></span>Foglalt
+        <span class="legend-dot bg-secondary"></span>Egyéb
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Map grid -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body">
+    <div id="warehouse-map"></div>
+  </div>
+</div>
+
+<!-- Location detail panel -->
+<div id="loc-detail" class="card border-0 shadow-sm mt-3 d-none">
+  <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-semibold" id="loc-detail-code"></h6>
+    <button class="btn-close" onclick="document.getElementById('loc-detail').classList.add('d-none')"></button>
+  </div>
+  <div class="card-body" id="loc-detail-body"></div>
+</div>
+
+<!-- Bulk create modal -->
+<div class="modal fade" id="bulkModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Helyek tömeges generálása</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-4"><label class="form-label">Zóna *</label><input class="form-control" id="b-zone" placeholder="pl. A"></div>
+          <div class="col-4"><label class="form-label">Sorok</label><input class="form-control" type="number" id="b-rows" value="10"></div>
+          <div class="col-4"><label class="form-label">Oszlopok</label><input class="form-control" type="number" id="b-cols" value="5"></div>
+          <div class="col-6"><label class="form-label">Típus</label>
+            <select class="form-select" id="b-type">
+              <option value="storage">Tároló</option>
+              <option value="picking">Pick</option>
+              <option value="staging">Előkészítő</option>
+              <option value="receiving">Bevételező</option>
+            </select>
+          </div>
+          <div class="col-6"><label class="form-label">RFID olvasó zóna</label><input class="form-control" id="b-rfid-zone" placeholder="pl. READER-A"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="bulkCreate()">Generálás</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add single location modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Hely hozzáadása</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Kód *</label><input class="form-control" id="l-code" placeholder="A-01-02"></div>
+        <div class="row g-2 mb-3">
+          <div class="col-6"><label class="form-label">Zóna *</label><input class="form-control" id="l-zone" placeholder="A"></div>
+          <div class="col-6"><label class="form-label">Típus</label>
+            <select class="form-select" id="l-type">
+              <option value="storage">Tároló</option><option value="picking">Pick</option>
+              <option value="staging">Előkészítő</option><option value="receiving">Bevételező</option>
+            </select>
+          </div>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-4"><label class="form-label">Sor</label><input class="form-control" type="number" id="l-row" value="1"></div>
+          <div class="col-4"><label class="form-label">Oszlop</label><input class="form-control" type="number" id="l-col" value="1"></div>
+          <div class="col-4"><label class="form-label">Max raklap</label><input class="form-control" type="number" id="l-max" value="1"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="addLocation()">Mentés</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allLocations = [];
+let currentZone = 'all';
+
+async function loadLocations() {
+  const r = await fetch('/api/locations/map/grid');
+  allLocations = await r.json();
+  buildZoneTabs();
+  renderMap();
+}
+
+function buildZoneTabs() {
+  const zones = ['all', ...new Set(allLocations.map(l=>l.zone))].sort();
+  const container = document.getElementById('zone-tabs');
+  container.innerHTML = zones.map(z => `
+    <button class="btn btn-sm ${z===currentZone?'btn-primary':'btn-outline-secondary'}"
+            onclick="setZone('${z}')">${z==='all'?'Összes':z}</button>
+  `).join('');
+}
+
+function setZone(z) {
+  currentZone = z;
+  buildZoneTabs();
+  renderMap();
+}
+
+function renderMap() {
+  const filtered = currentZone==='all' ? allLocations : allLocations.filter(l=>l.zone===currentZone);
+  if(!filtered.length) {
+    document.getElementById('warehouse-map').innerHTML = '<p class="text-muted text-center py-4">Nincs hely a kiválasztott zónában</p>';
+    return;
+  }
+
+  const byRow = {};
+  filtered.forEach(l => {
+    const r = l.row || 0;
+    if(!byRow[r]) byRow[r] = [];
+    byRow[r].push(l);
+  });
+
+  let html = '';
+  for(const row of Object.keys(byRow).sort((a,b)=>a-b)) {
+    html += `<div class="d-flex flex-wrap gap-1 mb-1 align-items-center">
+      <small class="text-muted me-2" style="min-width:28px">R${row}</small>`;
+    byRow[row].sort((a,b)=>(a.col||0)-(b.col||0)).forEach(l => {
+      const full = l.current_pallets >= l.max_pallets;
+      const cls = full ? 'loc-cell-full' : (l.current_pallets > 0 ? 'loc-cell-partial' : 'loc-cell-free');
+      html += `<div class="loc-cell ${cls}" onclick="showLocDetail(${l.id})" title="${l.code}&#10;${l.current_pallets}/${l.max_pallets}">
+        <span class="loc-code">${l.code}</span>
+        <span class="loc-count">${l.current_pallets}/${l.max_pallets}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  document.getElementById('warehouse-map').innerHTML = html;
+}
+
+async function showLocDetail(id) {
+  const r = await fetch(`/api/locations/${id}`);
+  const loc = await r.json();
+  const pr = await fetch(`/api/locations/${id}/pallets`);
+  const pallets = await pr.json();
+  document.getElementById('loc-detail-code').textContent = `${loc.code} – ${loc.zone} (${loc.zone_type})`;
+  document.getElementById('loc-detail-body').innerHTML = `
+    <div class="row">
+      <div class="col-md-4">
+        <dl class="row">
+          <dt class="col-6">Hely típus</dt><dd class="col-6">${loc.zone_type}</dd>
+          <dt class="col-6">Kapacitás</dt><dd class="col-6">${loc.current_pallets}/${loc.max_pallets}</dd>
+          <dt class="col-6">RFID olvasó</dt><dd class="col-6">${loc.rfid_reader_zone||'–'}</dd>
+        </dl>
+      </div>
+      <div class="col-md-8">
+        <p class="fw-semibold mb-2">Raklapok (${pallets.length}):</p>
+        ${pallets.length ? pallets.map(p=>`
+          <a href="/pallets/${p.id}" class="badge bg-primary-subtle text-primary text-decoration-none me-1">${p.pallet_number}</a>
+        `).join('') : '<span class="text-muted">Üres hely</span>'}
+      </div>
+    </div>`;
+  document.getElementById('loc-detail').classList.remove('d-none');
+}
+
+async function bulkCreate() {
+  const zone = document.getElementById('b-zone').value.trim().toUpperCase();
+  if(!zone) { showToast('Zóna kötelező!','danger'); return; }
+  const params = new URLSearchParams({
+    zone, rows: document.getElementById('b-rows').value,
+    cols: document.getElementById('b-cols').value,
+    zone_type: document.getElementById('b-type').value,
+    rfid_reader_zone: document.getElementById('b-rfid-zone').value,
+  });
+  const r = await fetch(`/api/locations/bulk-create?${params}`, {method:'POST'});
+  const d = await r.json();
+  bootstrap.Modal.getInstance(document.getElementById('bulkModal')).hide();
+  showToast(`${d.created} hely létrehozva`, 'success');
+  loadLocations();
+}
+
+async function addLocation() {
+  const payload = {
+    code: document.getElementById('l-code').value.trim(),
+    zone: document.getElementById('l-zone').value.trim().toUpperCase(),
+    zone_type: document.getElementById('l-type').value,
+    row: parseInt(document.getElementById('l-row').value)||1,
+    col: parseInt(document.getElementById('l-col').value)||1,
+    max_pallets: parseInt(document.getElementById('l-max').value)||1,
+  };
+  if(!payload.code || !payload.zone) { showToast('Kód és zóna kötelező!','danger'); return; }
+  const r = await fetch('/api/locations/', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('addModal')).hide();
+    showToast('Hely létrehozva','success');
+    loadLocations();
+  } else { const e=await r.json(); showToast(e.detail||'Hiba!','danger'); }
+}
+
+loadLocations();
+</script>
+{% endblock %}

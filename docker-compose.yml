@@ -1,0 +1,18 @@
+version: '3.9'
+
+services:
+  raktar:
+    build: .
+    container_name: raktar-rfid
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./raktar.db:/app/raktar.db
+    environment:
+      - DATABASE_URL=sqlite:///./raktar.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/pallets/stats/summary"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

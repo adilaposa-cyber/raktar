@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Gyártási fázisok{% endblock %}
+{% block page_title %}Gyártási fázisok{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+  <i class="bi bi-plus-lg me-1"></i>Új fázis definíció
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="alert alert-info border-0 shadow-sm mb-3">
+  <i class="bi bi-info-circle me-2"></i>
+  <strong>Fáziskezelés:</strong> Ha egy terméket megmunkálnak és az eredeti cikkszám megváltozik (pl. nyers → félkész → kész),
+  itt lehet megadni hogy mi legyen a következő fázis és hova kell vinni a raklapot.
+  A rendszer automatikusan szállítási feladatot hoz létre.
+</div>
+
+<div class="row g-3" id="phases-container">
+  <div class="col-12 text-center py-4"><div class="spinner-border"></div></div>
+</div>
+
+<!-- Create modal -->
+<div class="modal fade" id="createModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Új fázis definíció</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Fázis neve *</label>
+          <input class="form-control" id="f-name" placeholder="pl. Nyers → Megmunkált"></div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label">Forrás cikk (előtte)</label>
+            <select class="form-select" id="f-from-article">
+              <option value="">– Bármely cikk –</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Cél cikk (utána) *</label>
+            <select class="form-select" id="f-to-article">
+              <option value="">– Válasszon –</option>
+            </select>
+          </div>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label">Célzóna</label>
+            <input class="form-control" id="f-dest-zone" placeholder="pl. B (termelési zóna)">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Pontosabb célhely</label>
+            <select class="form-select" id="f-dest-loc">
+              <option value="">– Nincs megadva –</option>
+            </select>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Folyamat leírása</label>
+          <textarea class="form-control" id="f-desc" rows="2"
+            placeholder="Mit kell csinálni a raklappal ebben a fázisban..."></textarea>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="f-auto" checked>
+          <label class="form-check-label" for="f-auto">
+            Automatikus szállítási feladat létrehozása fázisváltáskor
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="createPhase()">Mentés</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadPhases() {
+  const r = await fetch('/api/phases/');
+  const data = await r.json();
+  const container = document.getElementById('phases-container');
+  if(!data.length) {
+    container.innerHTML = '<div class="col-12 text-center text-muted py-4">Nincs fázis definíció. Hozzon létre egyet!</div>';
+    return;
+  }
+  container.innerHTML = data.map(p => `
+    <div class="col-md-6 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-arrow-repeat me-2 text-warning"></i>${p.name}</h6>
+          <button class="btn btn-xs btn-outline-danger" onclick="deletePhase(${p.id})"><i class="bi bi-trash"></i></button>
+        </div>
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <div class="phase-article">${p.from_article ? `<span class="badge bg-secondary-subtle text-secondary">${p.from_article.article_number}</span><small class="d-block text-muted">${p.from_article.name}</small>` : '<span class="text-muted small">Bármely cikk</span>'}</div>
+            <i class="bi bi-arrow-right-circle-fill text-warning fs-4"></i>
+            <div class="phase-article">${p.to_article ? `<span class="badge bg-primary-subtle text-primary">${p.to_article.article_number}</span><small class="d-block text-muted">${p.to_article.name}</small>` : '<span class="text-muted small">–</span>'}</div>
+          </div>
+          <div class="small text-muted">
+            <div><i class="bi bi-geo me-1"></i>Cél: ${p.destination_location ? p.destination_location.code : (p.destination_zone||'Nincs megadva')}</div>
+            ${p.process_description ? `<div class="mt-1"><i class="bi bi-info-circle me-1"></i>${p.process_description}</div>` : ''}
+          </div>
+        </div>
+        <div class="card-footer bg-transparent border-0">
+          <span class="badge ${p.auto_task_create ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'}">
+            <i class="bi bi-${p.auto_task_create ? 'check' : 'x'}-circle me-1"></i>
+            ${p.auto_task_create ? 'Auto feladat' : 'Manuális'}
+          </span>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function deletePhase(id) {
+  if(!confirm('Törlés?')) return;
+  await fetch(`/api/phases/${id}`, {method:'DELETE'});
+  showToast('Fázis törölve','warning');
+  loadPhases();
+}
+
+async function createPhase() {
+  const payload = {
+    name: document.getElementById('f-name').value.trim(),
+    from_article_id: document.getElementById('f-from-article').value||null,
+    to_article_id: document.getElementById('f-to-article').value||null,
+    destination_zone: document.getElementById('f-dest-zone').value||null,
+    destination_location_id: document.getElementById('f-dest-loc').value||null,
+    process_description: document.getElementById('f-desc').value||null,
+    auto_task_create: document.getElementById('f-auto').checked,
+  };
+  if(!payload.name) { showToast('Fázis neve kötelező!','danger'); return; }
+  const r = await fetch('/api/phases/', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+    showToast('Fázis létrehozva','success');
+    loadPhases();
+  } else { const e=await r.json(); showToast(e.detail||'Hiba!','danger'); }
+}
+
+async function loadFormData() {
+  const [ar, lr] = await Promise.all([fetch('/api/articles/'), fetch('/api/locations/')]);
+  const [articles, locs] = await Promise.all([ar.json(), lr.json()]);
+  ['f-from-article','f-to-article'].forEach(id => {
+    const s = document.getElementById(id);
+    const defaultOpt = id==='f-from-article' ? '<option value="">– Bármely cikk –</option>' : '<option value="">– Válasszon –</option>';
+    s.innerHTML = defaultOpt;
+    articles.forEach(a => s.appendChild(new Option(`${a.article_number} – ${a.name}`, a.id)));
+  });
+  const ls = document.getElementById('f-dest-loc');
+  ls.innerHTML = '<option value="">– Nincs megadva –</option>';
+  locs.forEach(l => ls.appendChild(new Option(`${l.code} (${l.zone})`, l.id)));
+}
+
+document.getElementById('createModal').addEventListener('show.bs.modal', loadFormData);
+loadPhases();
+</script>
+{% endblock %}

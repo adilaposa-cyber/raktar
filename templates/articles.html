@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Cikkek{% endblock %}
+{% block page_title %}Cikktörzs{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+  <i class="bi bi-plus-lg me-1"></i>Új cikk
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr><th>Cikkszám</th><th>Megnevezés</th><th>Egység</th><th>Súly</th><th>Preferált zóna</th><th>Műveletek</th></tr>
+        </thead>
+        <tbody id="articles-tbody">
+          <tr><td colspan="6" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Create modal -->
+<div class="modal fade" id="createModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Új cikk felvétele</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Cikkszám *</label>
+          <input class="form-control" id="f-number" placeholder="pl. 324632"></div>
+        <div class="mb-3"><label class="form-label">Megnevezés *</label>
+          <input class="form-control" id="f-name" placeholder="pl. Alumínium profil 40x40"></div>
+        <div class="mb-3"><label class="form-label">Leírás</label>
+          <textarea class="form-control" id="f-desc" rows="2"></textarea></div>
+        <div class="row g-2 mb-3">
+          <div class="col-6"><label class="form-label">Egység</label>
+            <input class="form-control" id="f-unit" value="db"></div>
+          <div class="col-6"><label class="form-label">Súly (kg)</label>
+            <input class="form-control" type="number" id="f-weight" step="0.01"></div>
+        </div>
+        <div class="mb-3"><label class="form-label">Preferált tárolási zóna</label>
+          <input class="form-control" id="f-zone" placeholder="pl. A"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="createArticle()">Mentés</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadArticles() {
+  const r = await fetch('/api/articles/');
+  const data = await r.json();
+  const tbody = document.getElementById('articles-tbody');
+  if(!data.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Nincs cikk</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(a => `
+    <tr>
+      <td><code class="fw-semibold">${a.article_number}</code></td>
+      <td>${a.name}</td>
+      <td>${a.unit}</td>
+      <td>${a.weight_kg!=null ? a.weight_kg+' kg' : '–'}</td>
+      <td>${a.preferred_zone ? `<span class="badge bg-primary-subtle text-primary">${a.preferred_zone}</span>` : '–'}</td>
+      <td>
+        <button class="btn btn-xs btn-outline-danger" onclick="deleteArticle(${a.id},'${a.article_number}')">
+          <i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`).join('');
+}
+
+async function createArticle() {
+  const payload = {
+    article_number: document.getElementById('f-number').value.trim(),
+    name: document.getElementById('f-name').value.trim(),
+    description: document.getElementById('f-desc').value||null,
+    unit: document.getElementById('f-unit').value||'db',
+    weight_kg: parseFloat(document.getElementById('f-weight').value)||null,
+    preferred_zone: document.getElementById('f-zone').value||null,
+  };
+  if(!payload.article_number||!payload.name) { showToast('Cikkszám és megnevezés kötelező!','danger'); return; }
+  const r = await fetch('/api/articles/', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+    showToast('Cikk létrehozva','success');
+    loadArticles();
+  } else { const e=await r.json(); showToast(e.detail||'Hiba!','danger'); }
+}
+
+async function deleteArticle(id, num) {
+  if(!confirm(`Biztosan törlöd a(z) ${num} cikket?`)) return;
+  await fetch(`/api/articles/${id}`, {method:'DELETE'});
+  showToast('Cikk törölve','warning');
+  loadArticles();
+}
+
+loadArticles();
+</script>
+{% endblock %}

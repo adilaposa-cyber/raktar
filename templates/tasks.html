@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}Feladatok{% endblock %}
+{% block page_title %}Feladatok{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+  <i class="bi bi-plus-lg me-1"></i>Új feladat
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Filter bar -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <select class="form-select form-select-sm w-auto" id="filter-status" onchange="loadTasks()">
+        <option value="">Összes állapot</option>
+        <option value="pending" selected>Függőben</option>
+        <option value="assigned">Hozzárendelve</option>
+        <option value="in_progress">Folyamatban</option>
+        <option value="completed">Kész</option>
+        <option value="cancelled">Törölve</option>
+      </select>
+      <select class="form-select form-select-sm w-auto" id="filter-type" onchange="loadTasks()">
+        <option value="">Összes típus</option>
+        <option value="storage_in">Betárolás</option>
+        <option value="storage_out">Kitárolás</option>
+        <option value="transfer">Áthelyezés</option>
+        <option value="phase_change">Fázisváltás</option>
+        <option value="receiving">Bevételezés</option>
+      </select>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadTasks()">
+        <i class="bi bi-arrow-clockwise"></i> Frissít
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Task cards -->
+<div id="tasks-container" class="row g-3"></div>
+
+<!-- Create task modal -->
+<div class="modal fade" id="createModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Új feladat</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Típus *</label>
+          <select class="form-select" id="f-type">
+            <option value="storage_in">Betárolás</option>
+            <option value="storage_out">Kitárolás</option>
+            <option value="transfer">Áthelyezés</option>
+            <option value="phase_change">Fázisváltás</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Raklap</label>
+          <select class="form-select" id="f-pallet"></select>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6"><label class="form-label">Kiindulóhely</label>
+            <select class="form-select" id="f-from-loc"><option value="">–</option></select></div>
+          <div class="col-6"><label class="form-label">Célhely</label>
+            <select class="form-select" id="f-to-loc"><option value="">–</option></select></div>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6"><label class="form-label">Prioritás (1=sürgős)</label>
+            <input class="form-control" type="number" id="f-priority" value="5" min="1" max="10"></div>
+          <div class="col-6"><label class="form-label">Hozzárendelt</label>
+            <input class="form-control" id="f-assigned" placeholder="targoncás neve"></div>
+        </div>
+        <div class="mb-3"><label class="form-label">Megjegyzés</label>
+          <textarea class="form-control" id="f-notes" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="createTask()">Létrehozás</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadTasks() {
+  const status = document.getElementById('filter-status').value;
+  const type = document.getElementById('filter-type').value;
+  let url = '/api/tasks/?';
+  if(status) url += `status=${status}&`;
+  if(type) url += `task_type=${type}&`;
+  const r = await fetch(url);
+  const data = await r.json();
+  const container = document.getElementById('tasks-container');
+  if(!data.length) {
+    container.innerHTML = '<div class="col-12 text-center text-muted py-4">Nincs feladat a szűrőnek megfelelően</div>';
+    return;
+  }
+  container.innerHTML = data.map(t => `
+    <div class="col-md-6 col-xl-4">
+      <div class="card border-0 shadow-sm h-100 task-card task-${t.status}">
+        <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-start">
+          <div>
+            <code class="small">${t.task_number}</code>
+            <div class="fw-semibold">${taskTypeLabel(t.task_type)}</div>
+          </div>
+          <div class="d-flex flex-column align-items-end gap-1">
+            ${statusBadge(t.status)}
+            ${priorityBadge(t.priority)}
+          </div>
+        </div>
+        <div class="card-body pt-0">
+          <div class="d-flex gap-3 text-muted small mb-2">
+            <span><i class="bi bi-geo me-1"></i>${t.from_location ? t.from_location.code : (t.from_zone||'–')}</span>
+            <i class="bi bi-arrow-right"></i>
+            <span><i class="bi bi-geo-fill me-1"></i>${t.to_location ? t.to_location.code : (t.to_zone||'–')}</span>
+          </div>
+          ${t.assigned_to ? `<div class="small text-muted"><i class="bi bi-person me-1"></i>${t.assigned_to}</div>` : ''}
+          ${t.notes ? `<div class="small text-muted mt-1">${t.notes}</div>` : ''}
+        </div>
+        <div class="card-footer bg-transparent border-0 d-flex gap-2">
+          ${t.status==='pending' ? `<button class="btn btn-xs btn-outline-primary" onclick="startTask(${t.id})">Indítás</button>` : ''}
+          ${t.status==='in_progress' ? `<button class="btn btn-xs btn-success" onclick="completeTask(${t.id})">Kész</button>` : ''}
+          ${['pending','assigned','in_progress'].includes(t.status) ? `<button class="btn btn-xs btn-outline-danger ms-auto" onclick="cancelTask(${t.id})">Törlés</button>` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function startTask(id) {
+  const op = prompt('Kezelő neve:') || 'targoncás';
+  const r = await fetch(`/api/tasks/${id}/start?operator=${encodeURIComponent(op)}`, {method:'POST'});
+  if(r.ok) { showToast('Feladat indítva','success'); loadTasks(); }
+}
+
+async function completeTask(id) {
+  if(!confirm('Feladat befejezése? A raklap átkerül a célhelyre.')) return;
+  const r = await fetch(`/api/tasks/${id}/complete`, {method:'POST'});
+  if(r.ok) { showToast('Feladat kész!','success'); loadTasks(); }
+}
+
+async function cancelTask(id) {
+  if(!confirm('Biztosan törli ezt a feladatot?')) return;
+  await fetch(`/api/tasks/${id}/cancel`, {method:'POST'});
+  showToast('Feladat törölve','warning');
+  loadTasks();
+}
+
+async function createTask() {
+  const palletVal = document.getElementById('f-pallet').value;
+  const payload = {
+    task_type: document.getElementById('f-type').value,
+    pallet_id: palletVal ? parseInt(palletVal) : null,
+    from_location_id: parseInt(document.getElementById('f-from-loc').value)||null,
+    to_location_id: parseInt(document.getElementById('f-to-loc').value)||null,
+    priority: parseInt(document.getElementById('f-priority').value)||5,
+    assigned_to: document.getElementById('f-assigned').value||null,
+    notes: document.getElementById('f-notes').value||null,
+  };
+  const r = await fetch('/api/tasks/', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+    showToast('Feladat létrehozva','success');
+    loadTasks();
+  } else { const e=await r.json(); showToast(e.detail||'Hiba!','danger'); }
+}
+
+async function loadFormData() {
+  const [pr, lr] = await Promise.all([fetch('/api/pallets/?limit=200'), fetch('/api/locations/')]);
+  const [pallets, locs] = await Promise.all([pr.json(), lr.json()]);
+  const ps = document.getElementById('f-pallet');
+  ps.innerHTML = '<option value="">– Raklap –</option>';
+  pallets.forEach(p => ps.appendChild(new Option(`${p.pallet_number}`, p.id)));
+  ['f-from-loc','f-to-loc'].forEach(id => {
+    const s = document.getElementById(id);
+    s.innerHTML = '<option value="">–</option>';
+    locs.forEach(l => s.appendChild(new Option(`${l.code} (${l.zone})`, l.id)));
+  });
+}
+
+function taskTypeLabel(t) {
+  return {storage_in:'Betárolás', storage_out:'Kitárolás', transfer:'Áthelyezés',
+          phase_change:'Fázisváltás', receiving:'Bevételezés', shipping:'Szállítás'}[t]||t;
+}
+function statusBadge(s) {
+  const m={pending:'secondary',assigned:'info',in_progress:'warning',completed:'success',cancelled:'danger'};
+  return `<span class="badge bg-${m[s]||'secondary'}">${s}</span>`;
+}
+function priorityBadge(p) {
+  if(p<=2) return '<span class="badge bg-danger-subtle text-danger">Sürgős</span>';
+  if(p<=4) return '<span class="badge bg-warning-subtle text-warning">Magas</span>';
+  return '<span class="badge bg-secondary-subtle text-secondary">Normal</span>';
+}
+
+document.getElementById('createModal').addEventListener('show.bs.modal', loadFormData);
+loadTasks();
+</script>
+{% endblock %}

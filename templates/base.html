@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Dashboard{% endblock %} – RFID Raktár</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+
+<!-- ── Sidebar ── -->
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <i class="bi bi-broadcast-pin"></i>
+    <span>RFID Raktar</span>
+  </div>
+  <a href="/" class="sidebar-link {% if page=='dashboard' %}active{% endif %}">
+    <i class="bi bi-speedometer2"></i><span>Dashboard</span>
+  </a>
+  <a href="/pallets" class="sidebar-link {% if page=='pallets' %}active{% endif %}">
+    <i class="bi bi-box-seam"></i><span>Raklapok</span>
+  </a>
+  <a href="/locations" class="sidebar-link {% if page=='locations' %}active{% endif %}">
+    <i class="bi bi-grid-3x3-gap"></i><span>Raktártérkép</span>
+  </a>
+  <a href="/tasks" class="sidebar-link {% if page=='tasks' %}active{% endif %}">
+    <i class="bi bi-list-task"></i><span>Feladatok</span>
+  </a>
+  <a href="/receiving" class="sidebar-link {% if page=='receiving' %}active{% endif %}">
+    <i class="bi bi-truck"></i><span>Bevételezés</span>
+  </a>
+  <a href="/phases" class="sidebar-link {% if page=='phases' %}active{% endif %}">
+    <i class="bi bi-arrow-repeat"></i><span>Fázisok</span>
+  </a>
+  <a href="/rfid" class="sidebar-link {% if page=='rfid' %}active{% endif %}">
+    <i class="bi bi-wifi"></i><span>RFID</span>
+  </a>
+  <a href="/articles" class="sidebar-link {% if page=='articles' %}active{% endif %}">
+    <i class="bi bi-tags"></i><span>Cikkek</span>
+  </a>
+  <a href="/infor-ln" class="sidebar-link {% if page=='infor_ln' %}active{% endif %}">
+    <i class="bi bi-plug-fill"></i><span>Infor LN</span>
+  </a>
+  <div class="sidebar-footer">
+    <span id="ws-dot" class="dot dot-offline" title="WebSocket állapot"></span>
+    <small id="ws-label">Kapcsolódás...</small>
+  </div>
+</nav>
+
+<!-- ── Main ── -->
+<div class="main-wrap">
+  <header class="topbar">
+    <h5 class="mb-0 fw-semibold">{% block page_title %}{% endblock %}</h5>
+    <div class="d-flex align-items-center gap-3">
+      <span class="text-muted small" id="clock"></span>
+      {% block topbar_actions %}{% endblock %}
+    </div>
+  </header>
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9999" id="toast-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="/static/js/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

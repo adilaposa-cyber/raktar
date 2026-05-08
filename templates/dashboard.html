@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- KPI cards -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="card kpi-card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="kpi-icon bg-primary-subtle text-primary"><i class="bi bi-box-seam"></i></div>
+        <div class="kpi-value" id="kpi-total">–</div>
+        <div class="kpi-label">Összes raklap</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card kpi-card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="kpi-icon bg-success-subtle text-success"><i class="bi bi-archive"></i></div>
+        <div class="kpi-value" id="kpi-storage">–</div>
+        <div class="kpi-label">Tárolóban</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card kpi-card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="kpi-icon bg-warning-subtle text-warning"><i class="bi bi-truck"></i></div>
+        <div class="kpi-value" id="kpi-transit">–</div>
+        <div class="kpi-label">Szállítás alatt</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card kpi-card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="kpi-icon bg-danger-subtle text-danger"><i class="bi bi-list-task"></i></div>
+        <div class="kpi-value" id="kpi-tasks">–</div>
+        <div class="kpi-label">Nyitott feladat</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Utilization chart -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Raktár kihasználtság</h6>
+      </div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        <div style="max-width:260px;width:100%">
+          <canvas id="utilizationChart"></canvas>
+          <p class="text-center mt-2 mb-0 text-muted small" id="utilization-label"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live RFID feed -->
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-activity me-2 text-success"></i>Élő RFID esemény-napló</h6>
+        <span class="badge bg-success-subtle text-success" id="live-badge">ÉLŐ</span>
+      </div>
+      <div class="card-body p-0">
+        <div id="rfid-log" class="rfid-log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Recent movements -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Legutóbbi mozgások</h6>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th>Raklap</th><th>Akció</th><th>Honnan</th><th>Hova</th><th>Idő</th>
+            </tr></thead>
+            <tbody id="movements-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending tasks -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-list-task me-2"></i>Nyitott feladatok</h6>
+        <a href="/tasks" class="btn btn-sm btn-outline-primary">Összes</a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th>Feladat</th><th>Típus</th><th>Prioritás</th><th>Állapot</th>
+            </tr></thead>
+            <tbody id="tasks-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const utilizationChart = new Chart(document.getElementById('utilizationChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Foglalt', 'Szabad'],
+    datasets: [{
+      data: [0, 100],
+      backgroundColor: ['#0d6efd', '#e9ecef'],
+      borderWidth: 0,
+    }]
+  },
+  options: {
+    cutout: '72%',
+    plugins: { legend: { position: 'bottom' } },
+  }
+});
+
+async function loadStats() {
+  const r = await fetch('/api/pallets/stats/summary');
+  const d = await r.json();
+  document.getElementById('kpi-total').textContent = d.total_pallets;
+  document.getElementById('kpi-storage').textContent = d.in_storage;
+  document.getElementById('kpi-transit').textContent = d.in_transit;
+  document.getElementById('kpi-tasks').textContent = d.pending_tasks;
+  utilizationChart.data.datasets[0].data = [d.occupied_locations, d.total_locations - d.occupied_locations];
+  utilizationChart.update();
+  document.getElementById('utilization-label').textContent =
+    `${d.utilization_pct}% – ${d.occupied_locations}/${d.total_locations} hely foglalt`;
+}
+
+async function loadMovements() {
+  const r = await fetch('/api/pallets/recent-movements?limit=8');
+  const data = await r.json();
+  const tb = document.getElementById('movements-table');
+  tb.innerHTML = data.map(m => `
+    <tr>
+      <td><a href="/pallets/${m.pallet_id||''}">${m.pallet_number}</a></td>
+      <td><span class="badge ${actionBadge(m.action)}">${m.action}</span></td>
+      <td>${m.from}</td>
+      <td>${m.to}</td>
+      <td class="text-muted small">${fmtTime(m.moved_at)}</td>
+    </tr>`).join('');
+}
+
+async function loadTasks() {
+  const r = await fetch('/api/tasks?status=pending&status=assigned&status=in_progress');
+  const data = await r.json();
+  const tb = document.getElementById('tasks-table');
+  tb.innerHTML = data.slice(0,8).map(t => `
+    <tr>
+      <td><code>${t.task_number}</code></td>
+      <td>${taskTypeLabel(t.task_type)}</td>
+      <td>${priorityBadge(t.priority)}</td>
+      <td>${statusBadge(t.status)}</td>
+    </tr>`).join('');
+}
+
+function actionBadge(a) {
+  return {transfer:'bg-info-subtle text-info', rfid_scan:'bg-success-subtle text-success',
+          phase_change:'bg-warning-subtle text-warning', storage_in:'bg-primary-subtle text-primary'}[a]||'bg-secondary-subtle text-secondary';
+}
+function taskTypeLabel(t) {
+  return {storage_in:'Betárolás', storage_out:'Kitárolás', transfer:'Áthelyezés',
+          phase_change:'Fázisváltás', receiving:'Bevételezés', shipping:'Szállítás'}[t]||t;
+}
+function priorityBadge(p) {
+  if(p<=2) return '<span class="badge bg-danger">Sürgős</span>';
+  if(p<=4) return '<span class="badge bg-warning text-dark">Magas</span>';
+  return '<span class="badge bg-secondary">Normal</span>';
+}
+function statusBadge(s) {
+  const map = {pending:'secondary', assigned:'info', in_progress:'warning', completed:'success', cancelled:'danger'};
+  return `<span class="badge bg-${map[s]||'secondary'}">${s}</span>`;
+}
+function fmtTime(ts) {
+  if(!ts) return '–';
+  const d = new Date(ts);
+  return d.toLocaleTimeString('hu-HU', {hour:'2-digit',minute:'2-digit'});
+}
+
+// Subscribe to WebSocket for live RFID events
+window.onRFIDEvent = function(evt) {
+  const log = document.getElementById('rfid-log');
+  const row = document.createElement('div');
+  row.className = 'rfid-event';
+  row.innerHTML = `
+    <span class="rfid-zone">${evt.zone||'?'}</span>
+    <span class="rfid-epc">${evt.tag_epc}</span>
+    ${evt.pallet_number ? `<span class="rfid-pallet">${evt.pallet_number}</span>` : ''}
+    <span class="rfid-rssi text-muted">${evt.rssi??''}dBm</span>
+    <span class="rfid-time ms-auto text-muted">${fmtTime(evt.timestamp)}</span>`;
+  log.prepend(row);
+  if(log.children.length > 30) log.lastChild.remove();
+};
+
+loadStats();
+loadMovements();
+loadTasks();
+setInterval(() => { loadStats(); loadMovements(); }, 30000);
+</script>
+{% endblock %}

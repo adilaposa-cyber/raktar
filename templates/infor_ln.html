@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Infor LN integráció{% endblock %}
+{% block page_title %}Infor LN integráció{% endblock %}
+
+{% block content %}
+<!-- Status banner -->
+<div class="alert border-0 shadow-sm mb-3" id="ln-status-banner">
+  <div class="spinner-border spinner-border-sm me-2"></div> Státusz ellenőrzése...
+</div>
+
+<div class="row g-3 mb-3">
+  <!-- HU Mapping -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0">
+        <h6 class="mb-0"><i class="bi bi-link-45deg me-2"></i>HU ↔ RFID leképezés</h6>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small">Az Infor LN-ben lévő Handling Unit azonosítót rendelje hozzá az RFID EPC taghez.</p>
+        <div class="mb-3"><label class="form-label">Infor LN HU szám</label>
+          <input class="form-control" id="hu-number" placeholder="pl. HU-2024-000123"></div>
+        <div class="mb-3"><label class="form-label">RFID EPC</label>
+          <input class="form-control" id="hu-epc" placeholder="pl. E200..."></div>
+        <div class="mb-3"><label class="form-label">Raklap szám (opcionális)</label>
+          <input class="form-control" id="hu-pallet" placeholder="Ha tudja, töltse ki"></div>
+        <button class="btn btn-primary" onclick="mapHU()">
+          <i class="bi bi-link me-1"></i>Hozzárendelés
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual sync -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0">
+        <h6 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>Szinkronizáció</h6>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small">Az Infor LN integráció jelenleg szimulált üzemmódban fut.
+          A valódi integráció a Infor ION API-n keresztül fog megvalósulni.</p>
+        <div class="d-grid gap-2">
+          <button class="btn btn-outline-primary" onclick="syncIn()">
+            <i class="bi bi-cloud-download me-1"></i>Import (LN → Raktár)
+          </button>
+          <button class="btn btn-outline-secondary" onclick="syncOut()">
+            <i class="bi bi-cloud-upload me-1"></i>Export (Raktár → LN)
+          </button>
+        </div>
+        <div class="alert alert-warning mt-3 mb-0 small">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Konfigurálandó: Infor ION API végpont, hitelesítési adatok, leképezési szabályok
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sync log -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0"><i class="bi bi-journal-text me-2"></i>Szinkronizáció napló</h6>
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadLog()"><i class="bi bi-arrow-clockwise"></i></button>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr><th>Típus</th><th>Irány</th><th>Referencia</th><th>Állapot</th><th>Idő</th></tr>
+        </thead>
+        <tbody id="log-tbody">
+          <tr><td colspan="5" class="text-center text-muted py-3">Betöltés...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadStatus() {
+  const r = await fetch('/api/infor-ln/status');
+  const d = await r.json();
+  const banner = document.getElementById('ln-status-banner');
+  banner.className = `alert border-0 shadow-sm mb-3 ${d.connected ? 'alert-success' : 'alert-warning'}`;
+  banner.innerHTML = `
+    <i class="bi bi-${d.connected ? 'check-circle-fill text-success' : 'exclamation-circle-fill text-warning'} me-2"></i>
+    <strong>${d.connected ? 'Kapcsolódva' : 'Szimulált üzemmód'}</strong> – ${d.message}
+    ${d.next_steps ? `<ul class="mb-0 mt-2">${d.next_steps.map(s=>`<li>${s}</li>`).join('')}</ul>` : ''}`;
+}
+
+async function loadLog() {
+  const r = await fetch('/api/infor-ln/sync-log?limit=30');
+  const data = await r.json();
+  const tbody = document.getElementById('log-tbody');
+  tbody.innerHTML = data.length ? data.map(l => `
+    <tr>
+      <td>${l.sync_type}</td>
+      <td><span class="badge ${l.direction==='inbound'?'bg-info-subtle text-info':'bg-warning-subtle text-warning'}">${l.direction==='inbound'?'← Import':'→ Export'}</span></td>
+      <td><code class="small">${l.infor_ln_ref||'–'}</code></td>
+      <td><span class="badge bg-${l.status==='success'?'success':'danger'}">${l.status}</span></td>
+      <td class="text-muted small">${l.synced_at ? new Date(l.synced_at).toLocaleString('hu-HU') : '–'}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="text-center text-muted py-3">Nincs napló bejegyzés</td></tr>';
+}
+
+async function mapHU() {
+  const hu = document.getElementById('hu-number').value.trim();
+  const epc = document.getElementById('hu-epc').value.trim();
+  const pallet = document.getElementById('hu-pallet').value.trim();
+  if(!hu||!epc) { showToast('HU szám és EPC kötelező!','danger'); return; }
+  const params = new URLSearchParams({hu_number: hu, rfid_epc: epc});
+  if(pallet) params.set('pallet_number', pallet);
+  const r = await fetch(`/api/infor-ln/hu-mapping?${params}`, {method:'POST'});
+  if(r.ok) {
+    showToast('Leképezés sikeres!','success');
+    loadLog();
+    document.getElementById('hu-number').value='';
+    document.getElementById('hu-epc').value='';
+    document.getElementById('hu-pallet').value='';
+  } else { showToast('Hiba!','danger'); }
+}
+
+async function syncIn() {
+  showToast('Import szimulálva (valódi integráció konfigurálás szükséges)','info');
+  const r = await fetch('/api/infor-ln/import-receipt', {method:'POST',headers:{'Content-Type':'application/json'},body:'{"order_number":"TEST-001","note":"Teszt import"}'});
+  loadLog();
+}
+
+async function syncOut() {
+  showToast('Export szimulálva – valódi integráció konfigurálás szükséges','info');
+  loadLog();
+}
+
+loadStatus();
+loadLog();
+</script>
+{% endblock %}

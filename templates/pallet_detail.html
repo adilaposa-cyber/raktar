@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}Raklap részlet{% endblock %}
+{% block page_title %}Raklap részlet{% endblock %}
+
+{% block content %}
+<div id="pallet-content">
+  <div class="text-center py-5"><div class="spinner-border"></div></div>
+</div>
+
+<!-- Move modal -->
+<div class="modal fade" id="moveModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Raklap áthelyezése</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <label class="form-label">Célhely</label>
+        <select class="form-select mb-3" id="move-location">
+          <option value="">– Válasszon helyet –</option>
+        </select>
+        <label class="form-label">Kezelő</label>
+        <input class="form-control mb-3" id="move-operator" placeholder="Névsor / targonca">
+        <label class="form-label">Megjegyzés</label>
+        <input class="form-control" id="move-notes">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="doMove()">Áthelyezés</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Phase change modal -->
+<div class="modal fade" id="phaseModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Fázisváltás</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          Fázisváltáskor a raklap cikkszáma megváltozik (pl. megmunkálás után),
+          és automatikus szállítási feladat jön létre az új célállomásra.
+        </p>
+        <label class="form-label">Fázis</label>
+        <select class="form-select mb-3" id="phase-select">
+          <option value="">– Válasszon fázist –</option>
+        </select>
+        <label class="form-label">Kezelő</label>
+        <input class="form-control" id="phase-operator" placeholder="Névsor">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-warning" onclick="doPhaseChange()">Fázis váltás</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Auto storage modal -->
+<div class="modal fade" id="storageModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Automatikus betárolás</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p>A rendszer automatikusan kijelöl egy szabad tárolóhelyet és feladatot hoz létre.</p>
+        <label class="form-label">Kezelő</label>
+        <input class="form-control" id="storage-operator" value="targoncás">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-success" onclick="doAutoStorage()">Betárolás indítása</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const palletId = {{ pallet_id }};
+let palletData = null;
+
+async function loadPallet() {
+  const r = await fetch(`/api/pallets/${palletId}`);
+  if(!r.ok) { document.getElementById('pallet-content').innerHTML='<div class="alert alert-danger">Raklap nem található</div>'; return; }
+  palletData = await r.json();
+  renderPallet(palletData);
+}
+
+function renderPallet(p) {
+  const statusMap = {in_storage:['success','Tároló'], in_transit:['warning','Úton'],
+    at_receiving:['info','Bevételezés'], unknown:['secondary','Ismeretlen']};
+  const [sc, sl] = statusMap[p.status] || ['secondary', p.status];
+
+  document.getElementById('pallet-content').innerHTML = `
+    <div class="row g-3 mb-3">
+      <div class="col-lg-5">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="bi bi-box-seam me-2"></i>${p.pallet_number}</h6>
+            <span class="badge bg-${sc}">${sl}</span>
+          </div>
+          <div class="card-body">
+            <dl class="row mb-0">
+              <dt class="col-5">Cikk</dt>
+              <dd class="col-7">${p.article ? `<strong>${p.article.article_number}</strong><br><small>${p.article.name}</small>` : '–'}</dd>
+              <dt class="col-5">Mennyiség</dt>
+              <dd class="col-7">${p.quantity} ${p.unit}</dd>
+              <dt class="col-5">Hely</dt>
+              <dd class="col-7">${p.current_location ? `<code>${p.current_location.code}</code> (${p.current_location.zone})` : '<span class="text-muted">–</span>'}</dd>
+              <dt class="col-5">RFID EPC</dt>
+              <dd class="col-7">${p.rfid_tag ? `<code class="small">${p.rfid_tag.epc}</code>` : '<span class="text-muted">–</span>'}</dd>
+              <dt class="col-5">Infor HU</dt>
+              <dd class="col-7">${p.infor_ln_hu ? `<code>${p.infor_ln_hu}</code>` : '–'}</dd>
+              <dt class="col-5">Batch</dt>
+              <dd class="col-7">${p.batch_number || '–'}</dd>
+              <dt class="col-5">Létrehozva</dt>
+              <dd class="col-7">${p.created_at ? new Date(p.created_at).toLocaleString('hu-HU') : '–'}</dd>
+            </dl>
+          </div>
+          <div class="card-footer bg-transparent border-0 d-flex gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-primary" onclick="openMoveModal()">
+              <i class="bi bi-arrows-move me-1"></i>Áthelyezés</button>
+            <button class="btn btn-sm btn-outline-warning" onclick="openPhaseModal()">
+              <i class="bi bi-arrow-repeat me-1"></i>Fázisváltás</button>
+            <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#storageModal">
+              <i class="bi bi-archive me-1"></i>Auto betárolás</button>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <!-- Movement history -->
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-header bg-transparent border-0">
+            <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Mozgástörténet</h6>
+          </div>
+          <div class="card-body p-0" style="max-height:280px;overflow-y:auto">
+            ${p.movements.length ? `
+              <table class="table table-sm mb-0">
+                <thead class="table-light"><tr><th>Akció</th><th>Honnan</th><th>Hova</th><th>Kezelő</th><th>Idő</th></tr></thead>
+                <tbody>
+                  ${p.movements.map(m=>`<tr>
+                    <td><span class="badge bg-secondary-subtle text-secondary">${m.action}</span></td>
+                    <td>${m.from_location ? m.from_location.code : (m.from_zone||'–')}</td>
+                    <td>${m.to_location ? m.to_location.code : (m.to_zone||'–')}</td>
+                    <td>${m.operator||'–'}</td>
+                    <td class="text-muted small">${m.moved_at ? new Date(m.moved_at).toLocaleString('hu-HU',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '–'}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>` : '<p class="text-muted text-center py-3 mb-0">Nincs mozgástörténet</p>'}
+          </div>
+        </div>
+        <!-- Tasks -->
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-transparent border-0">
+            <h6 class="mb-0"><i class="bi bi-list-task me-2"></i>Feladatok</h6>
+          </div>
+          <div class="card-body p-0">
+            ${p.tasks.length ? `
+              <table class="table table-sm mb-0">
+                <thead class="table-light"><tr><th>Feladat</th><th>Típus</th><th>Cél</th><th>Állapot</th></tr></thead>
+                <tbody>
+                  ${p.tasks.map(t=>`<tr>
+                    <td><code>${t.task_number}</code></td>
+                    <td>${t.task_type}</td>
+                    <td>${t.to_location ? t.to_location.code : (t.to_zone||'–')}</td>
+                    <td>${statusBadge(t.status)}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>` : '<p class="text-muted text-center py-3 mb-0">Nincs feladat</p>'}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function openMoveModal() {
+  const r = await fetch('/api/locations/?zone_type=storage');
+  const locs = await r.json();
+  const sel = document.getElementById('move-location');
+  sel.innerHTML = '<option value="">– Válasszon helyet –</option>';
+  locs.forEach(l => {
+    const o = new Option(`${l.code} (${l.zone}) – ${l.current_pallets}/${l.max_pallets}`, l.id);
+    if(l.current_pallets >= l.max_pallets) o.disabled = true;
+    sel.appendChild(o);
+  });
+  new bootstrap.Modal(document.getElementById('moveModal')).show();
+}
+
+async function openPhaseModal() {
+  if(!palletData?.article) { showToast('Nincs cikk hozzárendelve a raklaphoz!','warning'); return; }
+  const r = await fetch(`/api/phases/for-article/${palletData.article.id}`);
+  const phases = await r.json();
+  const sel = document.getElementById('phase-select');
+  sel.innerHTML = '<option value="">– Válasszon fázist –</option>';
+  phases.forEach(ph => {
+    const to = ph.to_article ? `${ph.to_article.article_number}` : 'ismeretlen cikk';
+    sel.appendChild(new Option(`${ph.name} → ${to}`, ph.id));
+  });
+  if(!phases.length) { showToast('Nincs elérhető fázis ehhez a cikkhez','info'); return; }
+  new bootstrap.Modal(document.getElementById('phaseModal')).show();
+}
+
+async function doMove() {
+  const locId = document.getElementById('move-location').value;
+  const payload = {
+    to_location_id: locId ? parseInt(locId) : null,
+    operator: document.getElementById('move-operator').value || 'kezelő',
+    notes: document.getElementById('move-notes').value,
+  };
+  const r = await fetch(`/api/pallets/${palletId}/move`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('moveModal')).hide();
+    showToast('Raklap áthelyezve','success');
+    loadPallet();
+  } else { showToast('Hiba!','danger'); }
+}
+
+async function doPhaseChange() {
+  const phaseId = document.getElementById('phase-select').value;
+  if(!phaseId) { showToast('Válasszon fázist!','warning'); return; }
+  const payload = { phase_definition_id: parseInt(phaseId), operator: document.getElementById('phase-operator').value || 'kezelő' };
+  const r = await fetch(`/api/pallets/${palletId}/phase-change`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('phaseModal')).hide();
+    showToast('Fázisváltás sikeres!','success');
+    loadPallet();
+  } else { const e=await r.json(); showToast(e.detail||'Hiba!','danger'); }
+}
+
+async function doAutoStorage() {
+  const op = document.getElementById('storage-operator').value || 'targoncás';
+  const r = await fetch(`/api/pallets/${palletId}/auto-storage-in?operator=${encodeURIComponent(op)}`, {method:'POST'});
+  const data = await r.json();
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('storageModal')).hide();
+    showToast(`Betárolási feladat létrehozva: ${data.task_number} → ${data.suggested_location||'?'}`, 'success');
+    loadPallet();
+  } else { const e=await r.json(); showToast(e.detail||'Hiba!','danger'); }
+}
+
+function statusBadge(s) {
+  const m = {pending:'secondary', assigned:'info', in_progress:'warning', completed:'success', cancelled:'danger'};
+  return `<span class="badge bg-${m[s]||'secondary'}">${s}</span>`;
+}
+
+loadPallet();
+</script>
+{% endblock %}

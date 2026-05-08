@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}RFID kezelés{% endblock %}
+{% block page_title %}RFID kezelés{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <!-- Readers -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-wifi me-2"></i>RFID Olvasók (ATR7000)</h6>
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addReaderModal">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
+      <div class="card-body p-0" id="readers-container">
+        <div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live event feed -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-activity me-2 text-success"></i>Élő RFID olvasások</h6>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadEvents()"><i class="bi bi-arrow-clockwise"></i></button>
+          <button class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#simModal">
+            <i class="bi bi-play-circle me-1"></i>Szimuláció
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div id="rfid-events" style="max-height:340px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tag management -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+    <h6 class="mb-0"><i class="bi bi-tag me-2"></i>RFID Tag-ek</h6>
+    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addTagModal">
+      <i class="bi bi-plus-lg me-1"></i>Tag felvétele
+    </button>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr><th>EPC</th><th>Típus</th><th>Hozzárendelt raklap</th><th>Utoljára látva</th><th>Zóna</th><th>RSSI</th><th>Műveletek</th></tr>
+        </thead>
+        <tbody id="tags-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add reader modal -->
+<div class="modal fade" id="addReaderModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">RFID Olvasó hozzáadása</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Olvasó ID *</label>
+          <input class="form-control" id="r-id" placeholder="pl. ATR7000-A1"></div>
+        <div class="mb-3"><label class="form-label">Megnevezés *</label>
+          <input class="form-control" id="r-name" placeholder="pl. Bevételező kapu olvasó"></div>
+        <div class="row g-2 mb-3">
+          <div class="col-8"><label class="form-label">IP cím</label>
+            <input class="form-control" id="r-ip" placeholder="192.168.1.100"></div>
+          <div class="col-4"><label class="form-label">Port</label>
+            <input class="form-control" type="number" id="r-port" value="5084"></div>
+        </div>
+        <div class="mb-3"><label class="form-label">Zóna</label>
+          <input class="form-control" id="r-zone" placeholder="pl. A"></div>
+        <div class="mb-3"><label class="form-label">Helyszín leírás</label>
+          <input class="form-control" id="r-loc" placeholder="pl. Raktár bejárat bal oldal"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="addReader()">Mentés</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add tag modal -->
+<div class="modal fade" id="addTagModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">RFID Tag felvétele</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">EPC *</label>
+          <input class="form-control" id="t-epc" placeholder="pl. E2004..."></div>
+        <div class="mb-3"><label class="form-label">Típus</label>
+          <select class="form-select" id="t-type">
+            <option value="pallet">Raklap</option>
+            <option value="cart">Komissiózó kocsi</option>
+            <option value="forklift">Targonca</option>
+          </select></div>
+        <div class="mb-3"><label class="form-label">Leírás</label>
+          <input class="form-control" id="t-desc"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="addTag()">Mentés</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Simulate modal -->
+<div class="modal fade" id="simModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">RFID esemény szimulálása</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Tag EPC</label>
+          <input class="form-control" id="s-epc" placeholder="E2004..."></div>
+        <div class="mb-3"><label class="form-label">Zóna</label>
+          <input class="form-control" id="s-zone" value="A"></div>
+        <div class="mb-3"><label class="form-label">RSSI</label>
+          <input class="form-control" type="number" id="s-rssi" value="-65"></div>
+        <div class="mb-3"><label class="form-label">Olvasó ID</label>
+          <input class="form-control" id="s-reader" value="SIM-001"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-warning" onclick="simulate()">Szimulálás</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadReaders() {
+  const r = await fetch('/api/rfid/readers');
+  const data = await r.json();
+  const container = document.getElementById('readers-container');
+  if(!data.length) {
+    container.innerHTML = '<p class="text-muted text-center py-3">Nincs konfigurált olvasó</p>';
+    return;
+  }
+  container.innerHTML = `<div class="list-group list-group-flush">${data.map(rd => `
+    <div class="list-group-item">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <div class="fw-semibold">${rd.name}</div>
+          <small class="text-muted">${rd.reader_id} · ${rd.ip_address||'IP nincs megadva'}:${rd.port} · Zóna: ${rd.zone||'–'}</small>
+          ${rd.location_description ? `<div class="text-muted small">${rd.location_description}</div>` : ''}
+        </div>
+        <div class="d-flex flex-column align-items-end gap-1">
+          <span class="badge ${rd.status==='online'?'bg-success':'bg-danger'}">${rd.status}</span>
+          ${rd.last_seen ? `<small class="text-muted">${new Date(rd.last_seen).toLocaleString('hu-HU',{hour:'2-digit',minute:'2-digit'})}</small>` : ''}
+        </div>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+async function loadEvents() {
+  const r = await fetch('/api/rfid/events?limit=30');
+  const data = await r.json();
+  const container = document.getElementById('rfid-events');
+  container.innerHTML = data.length ? data.map(e => `
+    <div class="rfid-event">
+      <span class="rfid-zone">${e.zone||'?'}</span>
+      <span class="rfid-epc">${e.tag_epc}</span>
+      <span class="badge bg-secondary-subtle text-secondary">${e.event_type}</span>
+      <span class="text-muted small">${e.rssi??'?'} dBm</span>
+      <span class="ms-auto text-muted small">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString('hu-HU') : ''}</span>
+    </div>`).join('') : '<p class="text-muted text-center py-3 mb-0">Nincs esemény</p>';
+}
+
+async function loadTags() {
+  const r = await fetch('/api/rfid/tags');
+  const data = await r.json();
+  const tbody = document.getElementById('tags-tbody');
+  tbody.innerHTML = data.length ? data.map(t => `
+    <tr>
+      <td><code class="small">${t.epc}</code></td>
+      <td><span class="badge bg-secondary">${t.tag_type}</span></td>
+      <td>${t.pallet ? `<a href="/pallets/${t.pallet?.id||''}">${t.pallet?.pallet_number||'–'}</a>` : '<span class="text-muted">–</span>'}</td>
+      <td class="text-muted small">${t.last_seen ? new Date(t.last_seen).toLocaleString('hu-HU') : '–'}</td>
+      <td>${t.last_seen_zone||'–'}</td>
+      <td>${t.last_rssi!=null ? t.last_rssi+' dBm' : '–'}</td>
+      <td>
+        <button class="btn btn-xs btn-outline-danger" onclick="unassignTag(${t.id})"><i class="bi bi-unlink"></i></button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted py-3">Nincs tag</td></tr>';
+}
+
+async function addReader() {
+  const payload = {
+    reader_id: document.getElementById('r-id').value.trim(),
+    name: document.getElementById('r-name').value.trim(),
+    ip_address: document.getElementById('r-ip').value||null,
+    port: parseInt(document.getElementById('r-port').value)||5084,
+    zone: document.getElementById('r-zone').value||null,
+    location_description: document.getElementById('r-loc').value||null,
+  };
+  if(!payload.reader_id||!payload.name) { showToast('ID és megnevezés kötelező!','danger'); return; }
+  const r = await fetch('/api/rfid/readers', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('addReaderModal')).hide();
+    showToast('Olvasó hozzáadva','success');
+    loadReaders();
+  } else { const e=await r.json(); showToast(e.detail||'Hiba!','danger'); }
+}
+
+async function addTag() {
+  const payload = {
+    epc: document.getElementById('t-epc').value.trim(),
+    tag_type: document.getElementById('t-type').value,
+    description: document.getElementById('t-desc').value||null,
+  };
+  if(!payload.epc) { showToast('EPC kötelező!','danger'); return; }
+  const r = await fetch('/api/rfid/tags', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('addTagModal')).hide();
+    showToast('Tag hozzáadva','success');
+    loadTags();
+  } else { const e=await r.json(); showToast(e.detail||'Hiba!','danger'); }
+}
+
+async function unassignTag(id) {
+  if(!confirm('Tag leválasztása?')) return;
+  await fetch(`/api/rfid/tags/${id}/unassign`, {method:'POST'});
+  showToast('Tag leválasztva','warning');
+  loadTags();
+}
+
+async function simulate() {
+  const params = new URLSearchParams({
+    tag_epc: document.getElementById('s-epc').value,
+    zone: document.getElementById('s-zone').value,
+    rssi: document.getElementById('s-rssi').value,
+    reader_id: document.getElementById('s-reader').value,
+  });
+  const r = await fetch(`/api/rfid/simulate?${params}`, {method:'POST'});
+  const d = await r.json();
+  bootstrap.Modal.getInstance(document.getElementById('simModal')).hide();
+  showToast(`RFID esemény szimulálva (feldolgozva: ${d.processed})`, 'success');
+  loadEvents();
+}
+
+window.onRFIDEvent = function(evt) {
+  const container = document.getElementById('rfid-events');
+  const row = document.createElement('div');
+  row.className = 'rfid-event';
+  row.innerHTML = `<span class="rfid-zone">${evt.zone||'?'}</span>
+    <span class="rfid-epc">${evt.tag_epc}</span>
+    <span class="text-muted small">${evt.rssi??''}dBm</span>
+    <span class="ms-auto text-muted small">${new Date(evt.timestamp).toLocaleTimeString('hu-HU')}</span>`;
+  container.prepend(row);
+};
+
+loadReaders();
+loadEvents();
+loadTags();
+</script>
+{% endblock %}

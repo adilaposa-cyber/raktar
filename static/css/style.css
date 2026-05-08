@@ -1,0 +1,119 @@
+:root {
+  --sidebar-width: 220px;
+  --sidebar-bg: #1a1d23;
+  --sidebar-link: #9ba3af;
+  --sidebar-active: #ffffff;
+  --topbar-h: 56px;
+}
+
+/* ── Layout ── */
+body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #f0f2f5; }
+
+.sidebar {
+  position: fixed; left: 0; top: 0; bottom: 0; width: var(--sidebar-width);
+  background: var(--sidebar-bg); display: flex; flex-direction: column;
+  z-index: 100; overflow-y: auto;
+}
+
+.sidebar-brand {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 1.25rem 1rem 1rem; color: #fff; font-size: 1.1rem; font-weight: 700;
+  border-bottom: 1px solid rgba(255,255,255,.08); margin-bottom: .5rem;
+}
+.sidebar-brand i { font-size: 1.5rem; color: #3b82f6; }
+
+.sidebar-link {
+  display: flex; align-items: center; gap: .75rem;
+  padding: .55rem 1rem; color: var(--sidebar-link);
+  text-decoration: none; font-size: .875rem; border-radius: .375rem;
+  margin: .1rem .5rem; transition: background .15s, color .15s;
+}
+.sidebar-link:hover { background: rgba(255,255,255,.07); color: #fff; }
+.sidebar-link.active { background: #3b82f6; color: #fff; font-weight: 600; }
+.sidebar-link i { font-size: 1.1rem; min-width: 1.25rem; }
+
+.sidebar-footer {
+  margin-top: auto; padding: 1rem; border-top: 1px solid rgba(255,255,255,.08);
+  display: flex; align-items: center; gap: .5rem; color: #6b7280; font-size: .75rem;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-online { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+.dot-offline { background: #6b7280; }
+
+.main-wrap { margin-left: var(--sidebar-width); min-height: 100vh; display: flex; flex-direction: column; }
+
+.topbar {
+  position: sticky; top: 0; z-index: 50; background: #fff;
+  border-bottom: 1px solid #e5e7eb; height: var(--topbar-h);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+
+.content { padding: 1.5rem; flex: 1; }
+
+/* ── KPI Cards ── */
+.kpi-card .card-body { display: flex; align-items: center; gap: 1rem; padding: 1.25rem; }
+.kpi-icon { width: 52px; height: 52px; border-radius: .75rem; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+.kpi-value { font-size: 2rem; font-weight: 700; line-height: 1; color: #111827; }
+.kpi-label { font-size: .8rem; color: #6b7280; }
+
+/* ── RFID Log ── */
+.rfid-log { font-size: .8rem; }
+.rfid-event {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .45rem 1rem; border-bottom: 1px solid #f3f4f6;
+  transition: background .3s;
+}
+.rfid-event:hover { background: #f9fafb; }
+.rfid-event-new { background: #ecfdf5 !important; }
+.rfid-zone { background: #3b82f6; color: #fff; padding: .15rem .5rem; border-radius: .25rem; font-weight: 600; font-size: .75rem; min-width: 28px; text-align: center; }
+.rfid-epc { font-family: monospace; color: #374151; font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.rfid-pallet { color: #3b82f6; font-weight: 600; font-size: .8rem; }
+.rfid-rssi { font-size: .75rem; }
+.rfid-time { font-size: .72rem; min-width: 60px; text-align: right; }
+
+/* ── Location map ── */
+.loc-cell {
+  width: 62px; height: 44px; border-radius: .375rem; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 2px solid transparent; transition: all .15s; flex-shrink: 0;
+}
+.loc-cell:hover { transform: scale(1.05); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.loc-cell-free { background: #dcfce7; border-color: #86efac; }
+.loc-cell-partial { background: #fef9c3; border-color: #fde047; }
+.loc-cell-full { background: #fee2e2; border-color: #fca5a5; }
+.loc-code { font-size: .62rem; font-weight: 600; color: #374151; line-height: 1; }
+.loc-count { font-size: .6rem; color: #6b7280; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+/* ── Task cards ── */
+.task-card { border-left: 4px solid #e5e7eb !important; }
+.task-pending { border-left-color: #6b7280 !important; }
+.task-assigned { border-left-color: #3b82f6 !important; }
+.task-in_progress { border-left-color: #f59e0b !important; }
+.task-completed { border-left-color: #22c55e !important; }
+.task-cancelled { border-left-color: #ef4444 !important; opacity: .6; }
+
+/* ── Phase cards ── */
+.phase-article { flex: 1; text-align: center; }
+
+/* ── Utility ── */
+.btn-xs { padding: .2rem .5rem; font-size: .75rem; }
+.smaller { font-size: .7rem; }
+
+/* ── Toast ── */
+.toast-container .toast { min-width: 280px; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  :root { --sidebar-width: 64px; }
+  .sidebar-brand span, .sidebar-link span, .sidebar-footer small { display: none; }
+  .sidebar-brand { justify-content: center; padding: 1rem .5rem; }
+  .sidebar-link { justify-content: center; margin: .1rem .25rem; }
+}
