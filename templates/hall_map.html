@@ -1,0 +1,866 @@
+{% extends "base.html" %}
+{% block title %}Térkép szerkesztő{% endblock %}
+{% block page_title %}<span id="page-hall-name">Csarnok térkép</span>{% endblock %}
+
+{% block topbar_actions %}
+<!-- Mód váltó -->
+<div class="btn-group btn-group-sm me-2" role="group">
+  <button class="btn btn-outline-secondary active" id="btn-view" onclick="setMode('view')">
+    <i class="bi bi-eye me-1"></i>Nézet
+  </button>
+  <button class="btn btn-outline-primary" id="btn-edit" onclick="setMode('edit')">
+    <i class="bi bi-pencil me-1"></i>Szerkesztés
+  </button>
+</div>
+<!-- Szerkesztési eszközök -->
+<div id="edit-tools" class="d-none d-flex gap-1 me-2">
+  <button class="btn btn-sm btn-outline-secondary" onclick="addWorkstation()" title="Munkaállomás hozzáadása">
+    <i class="bi bi-plus-square me-1"></i>Állomás
+  </button>
+  <button class="btn btn-sm btn-outline-danger" onclick="addReader()" title="RFID olvasó hozzáadása">
+    <i class="bi bi-wifi me-1"></i>RFID olvasó
+  </button>
+  <button class="btn btn-sm btn-outline-dark" onclick="changeCanvas()" title="Vászon mérete">
+    <i class="bi bi-aspect-ratio me-1"></i>Vászon
+  </button>
+  <button class="btn btn-sm btn-success fw-semibold" onclick="saveLayout()">
+    <i class="bi bi-floppy me-1"></i>Mentés
+  </button>
+</div>
+<a href="/factory-admin" class="btn btn-sm btn-outline-secondary">
+  <i class="bi bi-arrow-left me-1"></i>Vissza
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex gap-3" style="height:calc(100vh - 130px)">
+
+  <!-- ═══ SVG VÁSZON ══════════════════════════════════════════════════════════ -->
+  <div class="card border-0 shadow-sm flex-grow-1 overflow-hidden" style="min-width:0">
+    <div class="card-body p-0 h-100 position-relative">
+
+      <!-- Edit mode overlay hint -->
+      <div id="edit-hint" class="d-none position-absolute top-0 start-0 w-100 py-1 text-center small fw-semibold"
+           style="background:#fef9c3;color:#92400e;z-index:10;border-bottom:1px solid #fde68a">
+        <i class="bi bi-pencil me-1"></i>Szerkesztési mód – kattintson az elemekre a kijelöléshez, húzza át a pozicionáláshoz
+      </div>
+
+      <div id="svg-container" style="width:100%;height:100%;overflow:auto;background:#e2e8f0">
+        <svg id="map-svg" xmlns="http://www.w3.org/2000/svg"
+             style="font-family:system-ui,sans-serif;cursor:default;display:block">
+
+          <!-- Háttér rácsozat -->
+          <defs>
+            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#cbd5e1" stroke-width="0.5"/>
+            </pattern>
+            <pattern id="grid-big" width="100" height="100" patternUnits="userSpaceOnUse">
+              <rect width="100" height="100" fill="url(#grid)"/>
+              <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#94a3b8" stroke-width="1"/>
+            </pattern>
+            <filter id="shadow">
+              <feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.15"/>
+            </filter>
+          </defs>
+
+          <rect id="canvas-bg" fill="url(#grid-big)"/>
+
+          <!-- Elemek rétegek -->
+          <g id="layer-workstations"></g>
+          <g id="layer-readers"></g>
+
+          <!-- "Kattintson ide" üzenet üres térképnél -->
+          <g id="empty-hint" style="display:none">
+            <text x="600" y="340" text-anchor="middle" font-size="18" fill="#94a3b8">
+              Üres térkép – adjon hozzá munkaállomásokat és RFID olvasókat
+            </text>
+            <text x="600" y="365" text-anchor="middle" font-size="13" fill="#cbd5e1">
+              Kattintson a "Szerkesztés" gombra a szerkesztési mód aktiválásához
+            </text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TULAJDONSÁGOK PANEL ══════════════════════════════════════════════════ -->
+  <div id="props-panel" class="card border-0 shadow-sm flex-shrink-0"
+       style="width:320px;overflow-y:auto">
+    <div class="card-body p-0">
+
+      <!-- Nincs kijelölve -->
+      <div id="panel-empty" class="text-center text-muted py-5 px-3">
+        <i class="bi bi-cursor fs-2 d-block mb-2"></i>
+        <div class="small">Kattintson egy elemre a tulajdonságok megtekintéséhez</div>
+        <hr class="my-4">
+        <div class="text-start small">
+          <div class="fw-semibold mb-2">Térkép áttekintő</div>
+          <div id="map-stats" class="text-muted">–</div>
+        </div>
+      </div>
+
+      <!-- Munkaállomás tulajdonságok -->
+      <div id="panel-ws" style="display:none">
+        <div class="px-3 py-2 border-bottom d-flex align-items-center gap-2">
+          <span id="ws-color-dot" style="width:14px;height:14px;border-radius:3px;flex-shrink:0"></span>
+          <strong id="ws-panel-title">Munkaállomás</strong>
+          <button class="btn-close ms-auto btn-close-sm" onclick="clearSelection()"></button>
+        </div>
+
+        <!-- Alapadatok -->
+        <div class="px-3 py-2 border-bottom">
+          <div class="small fw-semibold text-muted mb-2 text-uppercase">Alapadatok</div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm mb-1">Kód</label>
+            <input class="form-control form-control-sm" id="wp-code">
+          </div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm mb-1">Megnevezés</label>
+            <input class="form-control form-control-sm" id="wp-name">
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-7">
+              <label class="form-label form-label-sm mb-1">Típus</label>
+              <select class="form-select form-select-sm" id="wp-type">
+                <option value="assembly">Szerelő</option>
+                <option value="storage">Raktár</option>
+                <option value="transit">Tranzit</option>
+                <option value="finished">Kész terület</option>
+              </select>
+            </div>
+            <div class="col-5">
+              <label class="form-label form-label-sm mb-1">Szín</label>
+              <input type="color" class="form-control form-control-sm form-control-color w-100" id="wp-color">
+            </div>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label form-label-sm mb-1">Szélesség</label>
+              <input type="number" class="form-control form-control-sm" id="wp-w" min="40">
+            </div>
+            <div class="col-6">
+              <label class="form-label form-label-sm mb-1">Magasság</label>
+              <input type="number" class="form-control form-control-sm" id="wp-h" min="40">
+            </div>
+          </div>
+          <button class="btn btn-sm btn-primary w-100" onclick="saveWSProps()">
+            <i class="bi bi-check me-1"></i>Tulajdonságok mentése
+          </button>
+        </div>
+
+        <!-- Hézagoló lemez -->
+        <div class="px-3 py-2 border-bottom">
+          <div class="small fw-semibold text-muted mb-2 text-uppercase">Hézagoló lemez</div>
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="wp-shim-req" onchange="document.getElementById('wp-shim-fields').style.display=this.checked?'':'none'">
+            <label class="form-check-label small">Szükséges ennél az állomásnál</label>
+          </div>
+          <div id="wp-shim-fields">
+            <div class="mb-2">
+              <label class="form-label form-label-sm mb-1">Leírás</label>
+              <input class="form-control form-control-sm" id="wp-shim-desc" placeholder="pl. 0.3mm acél, 80x40mm">
+            </div>
+            <div class="mb-2">
+              <label class="form-label form-label-sm mb-1">Mennyiség (db)</label>
+              <input type="number" class="form-control form-control-sm" id="wp-shim-qty" min="0">
+            </div>
+          </div>
+          <button class="btn btn-sm btn-outline-warning w-100" onclick="saveWSProps()">
+            <i class="bi bi-layers me-1"></i>Hézagoló mentése
+          </button>
+        </div>
+
+        <!-- Aktuális munka -->
+        <div class="px-3 py-2 border-bottom">
+          <div class="small fw-semibold text-muted mb-2 text-uppercase">
+            <i class="bi bi-wrench me-1"></i>Aktuális munka
+          </div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm mb-1">Cikkszám / alkatrész</label>
+            <input class="form-control form-control-sm" id="wp-work-article" placeholder="pl. JD-4270-324632">
+          </div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm mb-1">Mit szerelnek itt?</label>
+            <textarea class="form-control form-control-sm" id="wp-work-desc" rows="2"
+                      placeholder="pl. John Deere 4270 futómű összeszerlése"></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm mb-1">Kezelő / csapat</label>
+            <input class="form-control form-control-sm" id="wp-work-op" placeholder="pl. A-műszak">
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-success flex-grow-1" onclick="saveCurrentWork(false)">
+              <i class="bi bi-play me-1"></i>Beállítás
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="saveCurrentWork(true)" title="Munka befejezve">
+              <i class="bi bi-stop me-1"></i>Kész
+            </button>
+          </div>
+        </div>
+
+        <!-- Veszélyes műveletek -->
+        <div class="px-3 py-2">
+          <button class="btn btn-sm btn-outline-danger w-100" onclick="deleteSelected()">
+            <i class="bi bi-trash me-1"></i>Munkaállomás törlése
+          </button>
+        </div>
+      </div>
+
+      <!-- RFID olvasó tulajdonságok -->
+      <div id="panel-reader" style="display:none">
+        <div class="px-3 py-2 border-bottom d-flex align-items-center gap-2">
+          <i class="bi bi-wifi text-danger"></i>
+          <strong id="reader-panel-title">RFID Olvasó</strong>
+          <button class="btn-close ms-auto btn-close-sm" onclick="clearSelection()"></button>
+        </div>
+        <div class="px-3 py-2 border-bottom">
+          <div class="small fw-semibold text-muted mb-2 text-uppercase">Azonosítás</div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm mb-1">Olvasó ID *</label>
+            <input class="form-control form-control-sm" id="rp-id" placeholder="pl. HK01">
+          </div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm mb-1">Megnevezés</label>
+            <input class="form-control form-control-sm" id="rp-name" placeholder="pl. HK01 – KSR bal bejárat">
+          </div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm mb-1">Zóna</label>
+            <input class="form-control form-control-sm" id="rp-zone" placeholder="pl. KSR-1323">
+          </div>
+        </div>
+        <div class="px-3 py-2 border-bottom">
+          <div class="small fw-semibold text-muted mb-2 text-uppercase">Hálózat</div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm mb-1">IP cím</label>
+            <input class="form-control form-control-sm" id="rp-ip" placeholder="192.168.1.101">
+          </div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm mb-1">Leírás / helyszín</label>
+            <input class="form-control form-control-sm" id="rp-desc" placeholder="pl. Bejárati kapu bal oldal">
+          </div>
+          <button class="btn btn-sm btn-primary w-100" onclick="saveReaderProps()">
+            <i class="bi bi-check me-1"></i>Mentés
+          </button>
+        </div>
+        <div class="px-3 py-2">
+          <button class="btn btn-sm btn-outline-danger w-100" onclick="deleteSelected()">
+            <i class="bi bi-trash me-1"></i>Olvasó törlése
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Munkaállomás hozzáadása modal -->
+<div class="modal fade" id="addWSModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Munkaállomás hozzáadása</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-4">
+            <label class="form-label">Kód *</label>
+            <input class="form-control" id="new-ws-code" placeholder="pl. 1423">
+          </div>
+          <div class="col-8">
+            <label class="form-label">Megnevezés</label>
+            <input class="form-control" id="new-ws-name" placeholder="pl. JD 1423 – Hajtómű szerelés">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Típus</label>
+            <select class="form-select" id="new-ws-type">
+              <option value="assembly">Szerelő</option>
+              <option value="storage">Raktár</option>
+              <option value="transit">Tranzit</option>
+              <option value="finished">Kész terület</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label">Szín</label>
+            <input type="color" class="form-control form-control-color w-100" id="new-ws-color" value="#3b82f6">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Szélesség</label>
+            <input type="number" class="form-control" id="new-ws-w" value="120" min="40">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Magasság</label>
+            <input type="number" class="form-control" id="new-ws-h" value="140" min="40">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="confirmAddWS()">Hozzáadás</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RFID olvasó hozzáadása modal -->
+<div class="modal fade" id="addReaderModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">RFID Olvasó hozzáadása</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Olvasó ID * <small class="text-muted">(pl. HK11)</small></label>
+          <input class="form-control" id="new-r-id" placeholder="HK11">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Megnevezés</label>
+          <input class="form-control" id="new-r-name" placeholder="pl. HK11 – Kijárati kapu">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Zóna</label>
+          <input class="form-control" id="new-r-zone" placeholder="pl. KÉSZ">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">IP cím</label>
+          <input class="form-control" id="new-r-ip" placeholder="192.168.1.111">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-danger" onclick="confirmAddReader()">
+          <i class="bi bi-wifi me-1"></i>Hozzáadás
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Állapot ──────────────────────────────────────────────────────────────────
+const HALL_ID = {{ hall_id }};
+const GRID = 20;           // snap-to-grid mérete
+let editMode = false;
+let mapData = {};          // {hall, canvas_w, canvas_h, workstations, readers}
+let elements = {};         // id → {type:'ws'|'reader', data, g (SVG elem)}
+let selected = null;       // {type, id}
+let dragging = null;       // {type, id, startX, startY, origX, origY}
+let pendingAdd = null;     // 'ws' | 'reader' + adatok – kattintásra helyezi
+
+const svg = document.getElementById('map-svg');
+
+// ── Betöltés ─────────────────────────────────────────────────────────────────
+async function load() {
+  const r = await fetch(`/api/factory/halls/${HALL_ID}/map`);
+  if (!r.ok) { showToast('Nem sikerült betölteni a térképet', 'danger'); return; }
+  mapData = await r.json();
+  document.getElementById('page-hall-name').textContent = mapData.hall.name;
+  document.title = mapData.hall.name + ' – Térkép';
+
+  setCanvasSize(mapData.canvas_w || 1200, mapData.canvas_h || 700);
+  renderAll();
+  updateMapStats();
+}
+
+function setCanvasSize(w, h) {
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  document.getElementById('canvas-bg').setAttribute('width', w);
+  document.getElementById('canvas-bg').setAttribute('height', h);
+  mapData.canvas_w = w;
+  mapData.canvas_h = h;
+}
+
+// ── Renderelés ────────────────────────────────────────────────────────────────
+function renderAll() {
+  elements = {};
+  document.getElementById('layer-workstations').innerHTML = '';
+  document.getElementById('layer-readers').innerHTML = '';
+
+  mapData.workstations.forEach(ws => renderWS(ws));
+  mapData.readers.forEach(rd => renderReader(rd));
+
+  const hasContent = mapData.workstations.length + mapData.readers.length > 0;
+  document.getElementById('empty-hint').style.display = hasContent ? 'none' : '';
+}
+
+function renderWS(ws) {
+  const x = ws.svg_x ?? 100, y = ws.svg_y ?? 100;
+  const w = ws.svg_w ?? 120, h = ws.svg_h ?? 140;
+  const col = ws.color || '#3b82f6';
+  const isActive = ws.current_work_description || ws.current_work_article;
+
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.dataset.id = ws.id;
+  g.dataset.type = 'ws';
+  g.setAttribute('class', 'map-element');
+  g.style.cursor = editMode ? 'grab' : 'pointer';
+
+  g.innerHTML = `
+    <rect class="ws-body" x="${x}" y="${y}" width="${w}" height="${h}"
+          fill="${col}22" stroke="${col}" stroke-width="2" rx="6"
+          filter="url(#shadow)"/>
+    <rect x="${x}" y="${y}" width="${w}" height="26" fill="${col}" rx="6"/>
+    <rect x="${x}" y="${y+20}" width="${w}" height="6" fill="${col}"/>
+    <text x="${x + w/2}" y="${y+17}" text-anchor="middle" font-size="11"
+          fill="white" font-weight="800">${esc(ws.code)}</text>
+    <text class="ws-name-txt" x="${x + w/2}" y="${y+42}" text-anchor="middle"
+          font-size="9" fill="#475569" font-weight="600"
+          style="max-width:${w-10}px">${esc(shortText(ws.name||'', w/7))}</text>
+    ${ws.shim_required ? `
+    <rect x="${x+w-30}" y="${y+28}" width="26" height="14" fill="#f59e0b" rx="3" opacity="0.9"/>
+    <text x="${x+w-17}" y="${y+38}" text-anchor="middle" font-size="8" fill="white" font-weight="700">⬡${ws.shim_quantity||0}</text>` : ''}
+    ${isActive ? `
+    <rect x="${x+4}" y="${y+h-40}" width="${w-8}" height="36" fill="white" rx="4" opacity="0.92"/>
+    <text x="${x + w/2}" y="${y+h-28}" text-anchor="middle" font-size="8" fill="#0f172a" font-weight="700">${esc(shortText(ws.current_work_article||'', 14))}</text>
+    <text x="${x + w/2}" y="${y+h-16}" text-anchor="middle" font-size="7.5" fill="#475569">${esc(shortText(ws.current_work_description||'', w/6.5))}</text>
+    <text x="${x + w/2}" y="${y+h-5}" text-anchor="middle" font-size="7" fill="#94a3b8">${esc(ws.current_work_operator||'')}</text>` : ''}`;
+
+  g.addEventListener('click', e => { e.stopPropagation(); selectElement('ws', ws.id); });
+  g.addEventListener('mousedown', e => startDrag(e, 'ws', ws.id, x, y));
+
+  document.getElementById('layer-workstations').appendChild(g);
+  elements[`ws-${ws.id}`] = { type: 'ws', data: ws, g };
+}
+
+function renderReader(rd) {
+  const x = rd.svg_x ?? 200, y = rd.svg_y ?? 200;
+  const isOnline = rd.status === 'online';
+
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.dataset.id = rd.id;
+  g.dataset.type = 'reader';
+  g.setAttribute('class', 'map-element');
+  g.style.cursor = editMode ? 'grab' : 'pointer';
+
+  g.innerHTML = `
+    <circle cx="${x}" cy="${y}" r="18" fill="${isOnline?'#22c55e':'#ef4444'}" opacity="0.15" stroke="${isOnline?'#22c55e':'#ef4444'}" stroke-width="2"/>
+    <circle cx="${x}" cy="${y}" r="10" fill="${isOnline?'#22c55e':'#ef4444'}"/>
+    <text x="${x}" y="${y+4}" text-anchor="middle" font-size="8" fill="white" font-weight="800">RF</text>
+    <text x="${x}" y="${y+28}" text-anchor="middle" font-size="8.5" fill="#1e293b" font-weight="700">${esc(rd.reader_id)}</text>
+    <text x="${x}" y="${y+38}" text-anchor="middle" font-size="7" fill="#64748b">${esc(shortText(rd.zone||'', 14))}</text>`;
+
+  g.addEventListener('click', e => { e.stopPropagation(); selectElement('reader', rd.id); });
+  g.addEventListener('mousedown', e => startDrag(e, 'reader', rd.id, x, y));
+
+  document.getElementById('layer-readers').appendChild(g);
+  elements[`reader-${rd.id}`] = { type: 'reader', data: rd, g };
+}
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+function getSVGPoint(e) {
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+function startDrag(e, type, id, origX, origY) {
+  if (!editMode) return;
+  e.preventDefault();
+  const pt = getSVGPoint(e);
+  dragging = { type, id, startX: pt.x, startY: pt.y, origX, origY };
+  svg.style.cursor = 'grabbing';
+}
+
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const pt = getSVGPoint(e);
+  const dx = pt.x - dragging.startX;
+  const dy = pt.y - dragging.startY;
+  const nx = Math.round((dragging.origX + dx) / GRID) * GRID;
+  const ny = Math.round((dragging.origY + dy) / GRID) * GRID;
+  const key = `${dragging.type}-${dragging.id}`;
+  const el = elements[key];
+  if (!el) return;
+  if (dragging.type === 'ws') {
+    moveWSElement(el.g, el.data, nx, ny);
+  } else {
+    moveReaderElement(el.g, nx, ny);
+  }
+  el.data.svg_x = nx;
+  el.data.svg_y = ny;
+});
+
+document.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  svg.style.cursor = '';
+  dragging = null;
+});
+
+function moveWSElement(g, ws, x, y) {
+  const w = ws.svg_w ?? 120, h = ws.svg_h ?? 140;
+  const rects = g.querySelectorAll('rect');
+  if (rects[0]) { rects[0].setAttribute('x', x); rects[0].setAttribute('y', y); }
+  if (rects[1]) { rects[1].setAttribute('x', x); rects[1].setAttribute('y', y); }
+  if (rects[2]) { rects[2].setAttribute('x', x); rects[2].setAttribute('y', y+20); }
+  // Újrarendereljük a teljes elemet a ws adattal
+  ws.svg_x = x; ws.svg_y = y;
+  const layer = g.parentNode;
+  layer.removeChild(g);
+  renderWS(ws);
+}
+
+function moveReaderElement(g, x, y) {
+  const c = g.querySelector('circle');
+  if (!c) return;
+  g.querySelectorAll('circle').forEach(el => { el.setAttribute('cx', x); el.setAttribute('cy', y); });
+  g.querySelectorAll('text').forEach((el, i) => {
+    el.setAttribute('x', x);
+    el.setAttribute('y', i === 0 ? y+4 : i === 1 ? y+28 : y+38);
+  });
+}
+
+// ── Kattintásra elhelyezés (új elem) ─────────────────────────────────────────
+svg.addEventListener('click', e => {
+  if (!pendingAdd) return;
+  const pt = getSVGPoint(e);
+  const x = Math.round(pt.x / GRID) * GRID;
+  const y = Math.round(pt.y / GRID) * GRID;
+  if (pendingAdd.type === 'ws') {
+    createWS(pendingAdd.data, x, y);
+  } else {
+    createReader(pendingAdd.data, x, y);
+  }
+  pendingAdd = null;
+  svg.style.cursor = '';
+  document.getElementById('edit-hint').textContent =
+    'Szerkesztési mód – kattintson az elemekre a kijelöléshez, húzza át a pozicionáláshoz';
+});
+
+// ── Elemek létrehozása (API) ──────────────────────────────────────────────────
+async function createWS(data, x, y) {
+  const params = new URLSearchParams({
+    code: data.code, name: data.name || data.code,
+    station_type: data.type || 'assembly',
+    color: data.color || '#3b82f6',
+    svg_x: x, svg_y: y,
+    svg_w: data.w || 120, svg_h: data.h || 140,
+    hall_id: HALL_ID,
+  });
+  const r = await fetch(`/api/factory/workstations?${params}`, { method: 'POST' });
+  if (r.ok) {
+    const ws = await r.json();
+    mapData.workstations.push(ws);
+    renderWS(ws);
+    showToast(`${ws.code} munkaállomás létrehozva`, 'success');
+    updateMapStats();
+    bootstrap.Modal.getInstance(document.getElementById('addWSModal'))?.hide();
+  } else {
+    const e = await r.json();
+    showToast(e.detail || 'Hiba!', 'danger');
+  }
+}
+
+async function createReader(data, x, y) {
+  const params = new URLSearchParams({
+    reader_id: data.reader_id, name: data.name || data.reader_id,
+    zone: data.zone || '', ip_address: data.ip || '',
+    location_description: data.desc || '',
+    hall_id: HALL_ID, svg_x: x, svg_y: y,
+  });
+  const r = await fetch(`/api/factory/readers?${params}`, { method: 'POST' });
+  if (r.ok) {
+    const rd = await r.json();
+    mapData.readers.push(rd);
+    renderReader(rd);
+    showToast(`${rd.reader_id} olvasó létrehozva`, 'success');
+    updateMapStats();
+    bootstrap.Modal.getInstance(document.getElementById('addReaderModal'))?.hide();
+  } else {
+    const e = await r.json();
+    showToast(e.detail || 'Hiba!', 'danger');
+  }
+}
+
+// ── Mentés ────────────────────────────────────────────────────────────────────
+async function saveLayout() {
+  const payload = {
+    canvas_w: mapData.canvas_w,
+    canvas_h: mapData.canvas_h,
+    workstations: mapData.workstations.map(ws => ({
+      id: ws.id, svg_x: ws.svg_x, svg_y: ws.svg_y, svg_w: ws.svg_w, svg_h: ws.svg_h,
+    })),
+    readers: mapData.readers.map(r => ({
+      id: r.id, svg_x: r.svg_x, svg_y: r.svg_y,
+    })),
+  };
+  const r = await fetch(`/api/factory/halls/${HALL_ID}/save-layout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (r.ok) {
+    showToast('Térkép elmentve', 'success');
+  } else {
+    showToast('Mentési hiba!', 'danger');
+  }
+}
+
+// ── Kijelölés & tulajdonságok panel ──────────────────────────────────────────
+function selectElement(type, id) {
+  clearSelectionHighlight();
+  selected = { type, id };
+  const key = `${type}-${id}`;
+  const el = elements[key];
+  if (!el) return;
+
+  // Kiemelés
+  const rect = el.g.querySelector('rect.ws-body') || el.g.querySelector('circle');
+  if (rect) rect.setAttribute('stroke-width', '3.5');
+
+  if (type === 'ws') {
+    const ws = el.data;
+    document.getElementById('panel-empty').style.display = 'none';
+    document.getElementById('panel-reader').style.display = 'none';
+    document.getElementById('panel-ws').style.display = '';
+
+    document.getElementById('ws-color-dot').style.background = ws.color || '#3b82f6';
+    document.getElementById('ws-panel-title').textContent = ws.code;
+    document.getElementById('wp-code').value = ws.code;
+    document.getElementById('wp-name').value = ws.name || '';
+    document.getElementById('wp-type').value = ws.station_type || 'assembly';
+    document.getElementById('wp-color').value = ws.color || '#3b82f6';
+    document.getElementById('wp-w').value = ws.svg_w || 120;
+    document.getElementById('wp-h').value = ws.svg_h || 140;
+    document.getElementById('wp-shim-req').checked = ws.shim_required;
+    document.getElementById('wp-shim-fields').style.display = ws.shim_required ? '' : 'none';
+    document.getElementById('wp-shim-desc').value = ws.shim_description || '';
+    document.getElementById('wp-shim-qty').value = ws.shim_quantity || 0;
+    document.getElementById('wp-work-article').value = ws.current_work_article || '';
+    document.getElementById('wp-work-desc').value = ws.current_work_description || '';
+    document.getElementById('wp-work-op').value = ws.current_work_operator || '';
+  } else {
+    const rd = el.data;
+    document.getElementById('panel-empty').style.display = 'none';
+    document.getElementById('panel-ws').style.display = 'none';
+    document.getElementById('panel-reader').style.display = '';
+
+    document.getElementById('reader-panel-title').textContent = rd.reader_id;
+    document.getElementById('rp-id').value = rd.reader_id;
+    document.getElementById('rp-name').value = rd.name;
+    document.getElementById('rp-zone').value = rd.zone || '';
+    document.getElementById('rp-ip').value = rd.ip_address || '';
+    document.getElementById('rp-desc').value = rd.location_description || '';
+  }
+}
+
+function clearSelection() {
+  clearSelectionHighlight();
+  selected = null;
+  document.getElementById('panel-empty').style.display = '';
+  document.getElementById('panel-ws').style.display = 'none';
+  document.getElementById('panel-reader').style.display = 'none';
+}
+
+function clearSelectionHighlight() {
+  if (!selected) return;
+  const key = `${selected.type}-${selected.id}`;
+  const el = elements[key];
+  if (!el) return;
+  const rect = el.g.querySelector('rect.ws-body') || el.g.querySelector('circle');
+  if (rect) rect.setAttribute('stroke-width', selected.type === 'ws' ? '2' : '2');
+}
+
+svg.addEventListener('click', e => {
+  if (e.target === svg || e.target.id === 'canvas-bg') {
+    if (!pendingAdd) clearSelection();
+  }
+});
+
+// ── Tulajdonságok mentése ─────────────────────────────────────────────────────
+async function saveWSProps() {
+  if (!selected || selected.type !== 'ws') return;
+  const params = new URLSearchParams({
+    name: document.getElementById('wp-name').value,
+    station_type: document.getElementById('wp-type').value,
+    color: document.getElementById('wp-color').value,
+    svg_w: document.getElementById('wp-w').value,
+    svg_h: document.getElementById('wp-h').value,
+    shim_required: document.getElementById('wp-shim-req').checked,
+    shim_description: document.getElementById('wp-shim-desc').value,
+    shim_quantity: document.getElementById('wp-shim-qty').value,
+  });
+  const r = await fetch(`/api/factory/workstations/${selected.id}?${params}`, { method: 'PUT' });
+  if (r.ok) {
+    const ws = await r.json();
+    const el = elements[`ws-${selected.id}`];
+    Object.assign(el.data, ws);
+    const layer = el.g.parentNode;
+    layer.removeChild(el.g);
+    renderWS(el.data);
+    showToast('Mentve', 'success');
+    selectElement('ws', selected.id);
+  } else { showToast('Hiba!', 'danger'); }
+}
+
+async function saveReaderProps() {
+  if (!selected || selected.type !== 'reader') return;
+  const params = new URLSearchParams({
+    name: document.getElementById('rp-name').value,
+    zone: document.getElementById('rp-zone').value,
+    ip_address: document.getElementById('rp-ip').value,
+    location_description: document.getElementById('rp-desc').value,
+  });
+  const r = await fetch(`/api/factory/readers/${selected.id}?${params}`, { method: 'PUT' });
+  if (r.ok) {
+    const rd = await r.json();
+    const el = elements[`reader-${selected.id}`];
+    Object.assign(el.data, rd);
+    const layer = el.g.parentNode;
+    layer.removeChild(el.g);
+    renderReader(el.data);
+    showToast('Mentve', 'success');
+    selectElement('reader', selected.id);
+  } else { showToast('Hiba!', 'danger'); }
+}
+
+async function saveCurrentWork(clear) {
+  if (!selected || selected.type !== 'ws') return;
+  const params = new URLSearchParams({ clear });
+  if (!clear) {
+    params.set('description', document.getElementById('wp-work-desc').value);
+    params.set('article', document.getElementById('wp-work-article').value);
+    params.set('operator', document.getElementById('wp-work-op').value);
+  }
+  const r = await fetch(`/api/factory/workstations/${selected.id}/current-work?${params}`, { method: 'POST' });
+  if (r.ok) {
+    const ws = await r.json();
+    const el = elements[`ws-${selected.id}`];
+    Object.assign(el.data, ws);
+    const layer = el.g.parentNode;
+    layer.removeChild(el.g);
+    renderWS(el.data);
+    showToast(clear ? 'Munka befejezve' : 'Aktuális munka beállítva', 'success');
+    selectElement('ws', selected.id);
+  } else { showToast('Hiba!', 'danger'); }
+}
+
+// ── Törlés ────────────────────────────────────────────────────────────────────
+async function deleteSelected() {
+  if (!selected) return;
+  const label = selected.type === 'ws' ? 'munkaállomást' : 'RFID olvasót';
+  if (!confirm(`Biztosan törli a kijelölt ${label}?`)) return;
+
+  const url = selected.type === 'ws'
+    ? `/api/factory/workstations/${selected.id}`
+    : `/api/factory/readers/${selected.id}`;
+  const r = await fetch(url, { method: 'DELETE' });
+  if (r.ok) {
+    const key = `${selected.type}-${selected.id}`;
+    elements[key]?.g.remove();
+    delete elements[key];
+    clearSelection();
+    showToast('Törölve', 'warning');
+    updateMapStats();
+  } else { showToast('Hiba!', 'danger'); }
+}
+
+// ── Új elem hozzáadása (modal → kattintás a vászonra) ────────────────────────
+function addWorkstation() {
+  new bootstrap.Modal(document.getElementById('addWSModal')).show();
+}
+
+function confirmAddWS() {
+  const code = document.getElementById('new-ws-code').value.trim();
+  if (!code) { showToast('Kód kötelező!', 'danger'); return; }
+  pendingAdd = {
+    type: 'ws',
+    data: {
+      code, name: document.getElementById('new-ws-name').value,
+      type: document.getElementById('new-ws-type').value,
+      color: document.getElementById('new-ws-color').value,
+      w: +document.getElementById('new-ws-w').value,
+      h: +document.getElementById('new-ws-h').value,
+    },
+  };
+  bootstrap.Modal.getInstance(document.getElementById('addWSModal')).hide();
+  svg.style.cursor = 'crosshair';
+  document.getElementById('edit-hint').textContent =
+    '➕ Kattintson a térképre a munkaállomás elhelyezéséhez...';
+}
+
+function addReader() {
+  new bootstrap.Modal(document.getElementById('addReaderModal')).show();
+}
+
+function confirmAddReader() {
+  const rid = document.getElementById('new-r-id').value.trim();
+  if (!rid) { showToast('Olvasó ID kötelező!', 'danger'); return; }
+  pendingAdd = {
+    type: 'reader',
+    data: {
+      reader_id: rid,
+      name: document.getElementById('new-r-name').value || rid,
+      zone: document.getElementById('new-r-zone').value,
+      ip: document.getElementById('new-r-ip').value,
+    },
+  };
+  bootstrap.Modal.getInstance(document.getElementById('addReaderModal')).hide();
+  svg.style.cursor = 'crosshair';
+  document.getElementById('edit-hint').textContent =
+    '📡 Kattintson a térképre az RFID olvasó elhelyezéséhez...';
+}
+
+// ── Vászon méret ──────────────────────────────────────────────────────────────
+function changeCanvas() {
+  const w = parseInt(prompt('Vászon szélessége (px):', mapData.canvas_w)) || mapData.canvas_w;
+  const h = parseInt(prompt('Vászon magassága (px):', mapData.canvas_h)) || mapData.canvas_h;
+  setCanvasSize(w, h);
+}
+
+// ── Szerkesztési mód ──────────────────────────────────────────────────────────
+function setMode(mode) {
+  editMode = mode === 'edit';
+  document.getElementById('btn-view').classList.toggle('active', !editMode);
+  document.getElementById('btn-edit').classList.toggle('active', editMode);
+  document.getElementById('edit-tools').classList.toggle('d-none', !editMode);
+  document.getElementById('edit-hint').classList.toggle('d-none', !editMode);
+  document.querySelectorAll('.map-element').forEach(g => {
+    g.style.cursor = editMode ? 'grab' : 'pointer';
+  });
+}
+
+// ── Segéd függvények ──────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function shortText(s, maxChars) {
+  maxChars = Math.floor(maxChars) || 12;
+  return s.length > maxChars ? s.slice(0, maxChars) + '…' : s;
+}
+
+function updateMapStats() {
+  const el = document.getElementById('map-stats');
+  const wsCount = Object.values(elements).filter(e => e.type === 'ws').length;
+  const rCount = Object.values(elements).filter(e => e.type === 'reader').length;
+  el.innerHTML = `
+    <div class="d-flex flex-column gap-1">
+      <div>🔲 Munkaállomások: <strong>${wsCount} db</strong></div>
+      <div>📡 RFID olvasók: <strong>${rCount} db</strong></div>
+      <div class="mt-2 text-muted" style="font-size:.75rem">
+        <a href="/szerelde">Élő térkép nézet →</a>
+      </div>
+    </div>`;
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { clearSelection(); pendingAdd = null; svg.style.cursor = ''; }
+  if (e.key === 'Delete' && selected) deleteSelected();
+  if (e.key === 's' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveLayout(); }
+  if (e.key === 'e') setMode(editMode ? 'view' : 'edit');
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+load();
+</script>
+
+<style>
+.map-element:hover rect.ws-body { stroke-width: 3 !important; }
+.map-element:hover circle { stroke-width: 3 !important; }
+#svg-container::-webkit-scrollbar { width: 8px; height: 8px; }
+#svg-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+</style>
+{% endblock %}

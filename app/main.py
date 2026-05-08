@@ -45,6 +45,8 @@ ws_manager = ConnectionManager()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    from app.migrate import run_migrations
+    run_migrations()
     yield
 
 
@@ -145,6 +147,10 @@ async def page_targonca(request: Request):
 @app.get("/factory-admin")
 async def page_factory_admin(request: Request):
     return templates.TemplateResponse("factory_admin.html", {"request": request, "page": "factory_admin"})
+
+@app.get("/hall-map/{hall_id}")
+async def page_hall_map(request: Request, hall_id: int):
+    return templates.TemplateResponse("hall_map.html", {"request": request, "page": "factory_admin", "hall_id": hall_id})
 
 
 if __name__ == "__main__":

@@ -183,6 +183,12 @@ class RFIDReader(Base):
     last_seen = Column(DateTime(timezone=True))
     firmware_version = Column(String(50))
     is_active = Column(Boolean, default=True)
+    # Térkép pozíció
+    hall_id = Column(Integer, ForeignKey("halls.id"), nullable=True)
+    svg_x = Column(Integer, default=100)
+    svg_y = Column(Integer, default=100)
+
+    hall = relationship("Hall")
 
 
 class RFIDEvent(Base):
@@ -291,6 +297,14 @@ class WorkStation(Base):
     notes = Column(Text)
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
+    # Aktuális munka ezen az állomáson
+    current_work_description = Column(Text)
+    current_work_article = Column(String(100))
+    current_work_started_at = Column(DateTime(timezone=True))
+    current_work_operator = Column(String(100))
+    # Térkép: vászon mérete (csak hall szintű, az első WS-en tárolva)
+    canvas_w = Column(Integer, default=1200)
+    canvas_h = Column(Integer, default=700)
 
     hall = relationship("Hall", back_populates="workstations")
 

@@ -32,6 +32,23 @@ def _ws_dict(w: models.WorkStation) -> dict:
         "color": w.color, "shim_required": w.shim_required,
         "shim_description": w.shim_description, "shim_quantity": w.shim_quantity,
         "notes": w.notes, "is_active": w.is_active, "sort_order": w.sort_order,
+        "current_work_description": w.current_work_description,
+        "current_work_article": w.current_work_article,
+        "current_work_started_at": w.current_work_started_at.isoformat() if w.current_work_started_at else None,
+        "current_work_operator": w.current_work_operator,
+        "canvas_w": w.canvas_w, "canvas_h": w.canvas_h,
+    }
+
+
+def _reader_dict(r: models.RFIDReader) -> dict:
+    return {
+        "id": r.id, "reader_id": r.reader_id, "name": r.name,
+        "ip_address": r.ip_address, "port": r.port, "zone": r.zone,
+        "location_description": r.location_description,
+        "status": r.status,
+        "last_seen": r.last_seen.isoformat() if r.last_seen else None,
+        "is_active": r.is_active,
+        "hall_id": r.hall_id, "svg_x": r.svg_x, "svg_y": r.svg_y,
     }
 
 
@@ -342,3 +359,215 @@ def overview(db: Session = Depends(get_db)):
     ).all()
 
     return {"factories": result, "standalone_workstations": [_ws_dict(w) for w in standalone]}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HALL TÉRKÉP API-K
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/halls/{hid}/map")
+def get_hall_map(hid: int, db: Session = Depends(get_db)):
+    """Egy csarnok teljes térkép adatai: munkaállomások + RFID olvasók."""
+    hall = db.query(models.Hall).filter(models.Hall.id == hid).first()
+    if not hall:
+        raise HTTPException(404, "Csarnok nem található")
+
+    workstations = db.query(models.WorkStation).filter(
+        models.WorkStation.hall_id == hid,
+        models.WorkStation.is_active == True,
+    ).order_by(models.WorkStation.sort_order, models.WorkStation.code).all()
+
+    readers = db.query(models.RFIDReader).filter(
+        models.RFIDReader.hall_id == hid,
+        models.RFIDReader.is_active == True,
+    ).all()
+
+    # Vászon mérete a hall-on tárolt értékekből, vagy default
+    canvas_w = 1200
+    canvas_h = 700
+    if workstations:
+        canvas_w = workstations[0].canvas_w or 1200
+        canvas_h = workstations[0].canvas_h or 700
+
+    return {
+        "hall": _hall_dict(hall),
+        "canvas_w": canvas_w,
+        "canvas_h": canvas_h,
+        "workstations": [_ws_dict(w) for w in workstations],
+        "readers": [_reader_dict(r) for r in readers],
+    }
+
+
+@router.post("/halls/{hid}/save-layout")
+def save_hall_layout(hid: int, layout: dict, db: Session = Depends(get_db)):
+    """
+    Térkép elrendezés mentése – munkaállomások és olvasók SVG pozíciói.
+    Body: {
+      canvas_w, canvas_h,
+      workstations: [{id, svg_x, svg_y, svg_w, svg_h}],
+      readers: [{id, svg_x, svg_y}]
+    }
+    """
+    hall = db.query(models.Hall).filter(models.Hall.id == hid).first()
+    if not hall:
+        raise HTTPException(404, "Csarnok nem található")
+
+    canvas_w = layout.get("canvas_w", 1200)
+    canvas_h = layout.get("canvas_h", 700)
+
+    for ws_data in layout.get("workstations", []):
+        ws = db.query(models.WorkStation).filter(models.WorkStation.id == ws_data["id"]).first()
+        if ws and ws.hall_id == hid:
+            ws.svg_x = ws_data.get("svg_x", ws.svg_x)
+            ws.svg_y = ws_data.get("svg_y", ws.svg_y)
+            ws.svg_w = ws_data.get("svg_w", ws.svg_w)
+            ws.svg_h = ws_data.get("svg_h", ws.svg_h)
+            ws.canvas_w = canvas_w
+            ws.canvas_h = canvas_h
+
+    for rd_data in layout.get("readers", []):
+        rd = db.query(models.RFIDReader).filter(models.RFIDReader.id == rd_data["id"]).first()
+        if rd:
+            rd.svg_x = rd_data.get("svg_x", rd.svg_x)
+            rd.svg_y = rd_data.get("svg_y", rd.svg_y)
+
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/workstations/{wid}/current-work")
+def update_current_work(
+    wid: int,
+    description: Optional[str] = None,
+    article: Optional[str] = None,
+    operator: Optional[str] = None,
+    clear: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Megadja, hogy éppen mit szerelnek az adott állomáson."""
+    ws = db.query(models.WorkStation).filter(models.WorkStation.id == wid).first()
+    if not ws:
+        raise HTTPException(404, "Munkaállomás nem található")
+    if clear:
+        ws.current_work_description = None
+        ws.current_work_article = None
+        ws.current_work_started_at = None
+        ws.current_work_operator = None
+    else:
+        if description is not None:
+            ws.current_work_description = description
+        if article is not None:
+            ws.current_work_article = article
+        if operator is not None:
+            ws.current_work_operator = operator
+        if description or article:
+            ws.current_work_started_at = datetime.now()
+    db.commit()
+    return _ws_dict(ws)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RFID OLVASÓ TÉRKÉP CRUD
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/readers")
+def list_map_readers(hall_id: Optional[int] = None, db: Session = Depends(get_db)):
+    q = db.query(models.RFIDReader).filter(models.RFIDReader.is_active == True)
+    if hall_id:
+        q = q.filter(models.RFIDReader.hall_id == hall_id)
+    return [_reader_dict(r) for r in q.all()]
+
+
+@router.post("/readers")
+def create_map_reader(
+    reader_id: str,
+    name: str,
+    hall_id: Optional[int] = None,
+    ip_address: Optional[str] = None,
+    zone: Optional[str] = None,
+    location_description: Optional[str] = None,
+    svg_x: int = 200,
+    svg_y: int = 200,
+    db: Session = Depends(get_db),
+):
+    existing = db.query(models.RFIDReader).filter(models.RFIDReader.reader_id == reader_id).first()
+    if existing:
+        raise HTTPException(400, f"'{reader_id}' olvasó ID már létezik")
+    r = models.RFIDReader(
+        reader_id=reader_id, name=name, hall_id=hall_id,
+        ip_address=ip_address, zone=zone,
+        location_description=location_description,
+        svg_x=svg_x, svg_y=svg_y,
+    )
+    db.add(r)
+    db.commit()
+    db.refresh(r)
+    return _reader_dict(r)
+
+
+@router.put("/readers/{rid}")
+def update_map_reader(
+    rid: int,
+    name: Optional[str] = None,
+    hall_id: Optional[int] = None,
+    ip_address: Optional[str] = None,
+    zone: Optional[str] = None,
+    location_description: Optional[str] = None,
+    svg_x: Optional[int] = None,
+    svg_y: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    r = db.query(models.RFIDReader).filter(models.RFIDReader.id == rid).first()
+    if not r:
+        raise HTTPException(404, "Olvasó nem található")
+    for field, val in [
+        ("name", name), ("hall_id", hall_id), ("ip_address", ip_address),
+        ("zone", zone), ("location_description", location_description),
+        ("svg_x", svg_x), ("svg_y", svg_y),
+    ]:
+        if val is not None:
+            setattr(r, field, val)
+    db.commit()
+    return _reader_dict(r)
+
+
+@router.delete("/readers/{rid}")
+def delete_map_reader(rid: int, db: Session = Depends(get_db)):
+    r = db.query(models.RFIDReader).filter(models.RFIDReader.id == rid).first()
+    if not r:
+        raise HTTPException(404, "Olvasó nem található")
+    r.is_active = False
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/halls/{hid}/seed-readers")
+def seed_hall_readers(hid: int, db: Session = Depends(get_db)):
+    """HK01-HK10 RFID olvasók betöltése a csarnokhoz az alaprajz alapján."""
+    from app.factory_config import HK_READERS as CONFIG_READERS
+    hall = db.query(models.Hall).filter(models.Hall.id == hid).first()
+    if not hall:
+        raise HTTPException(404, "Csarnok nem található")
+
+    created = 0
+    for hk in CONFIG_READERS:
+        existing = db.query(models.RFIDReader).filter(
+            models.RFIDReader.reader_id == hk["id"]
+        ).first()
+        if existing:
+            existing.hall_id = hid
+            existing.svg_x = hk["svg_x"]
+            existing.svg_y = hk["svg_y"]
+        else:
+            db.add(models.RFIDReader(
+                reader_id=hk["id"],
+                name=hk["name"],
+                zone=hk["zone"],
+                location_description=hk.get("description", ""),
+                hall_id=hid,
+                svg_x=hk["svg_x"],
+                svg_y=hk["svg_y"],
+            ))
+            created += 1
+    db.commit()
+    return {"ok": True, "created": created}

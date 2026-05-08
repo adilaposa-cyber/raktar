@@ -270,6 +270,7 @@ async function loadOverview() {
                     <div class="card-body py-2 px-3">
                       <div class="fw-bold">${ws.code}</div>
                       <div class="small text-muted">${ws.name||'–'}</div>
+                      ${ws.current_work_description ? `<div class="small mt-1 text-success"><i class="bi bi-wrench me-1"></i>${ws.current_work_article||''} – ${ws.current_work_description.slice(0,30)}</div>` : ''}
                       ${ws.shim_required ? `<div class="small mt-1"><span class="badge bg-warning-subtle text-warning"><i class="bi bi-layers me-1"></i>Hézagoló: ${ws.shim_quantity} db</span></div>` : ''}
                       <div class="d-flex gap-1 mt-1">
                         <button class="btn btn-xs btn-outline-primary" style="padding:1px 6px;font-size:.7rem" onclick="editWS(${JSON.stringify(ws).replace(/"/g,'&quot;')})"><i class="bi bi-pencil"></i></button>
@@ -282,10 +283,17 @@ async function loadOverview() {
               </div>
             </div>`).join('')}
         </div>
-        <div class="card-footer bg-transparent">
+        <div class="card-footer bg-transparent d-flex gap-2">
           <button class="btn btn-sm btn-outline-primary" onclick="openAddHall(${f.id})">
             <i class="bi bi-plus me-1"></i>Csarnok hozzáadása
           </button>
+          ${f.halls.map(h => `
+          <a href="/hall-map/${h.id}" class="btn btn-sm btn-primary">
+            <i class="bi bi-map me-1"></i>${h.name} – Térkép szerkesztése
+          </a>
+          <button class="btn btn-sm btn-outline-warning" onclick="seedReaders(${h.id})" title="HK01-HK10 olvasók betöltése">
+            <i class="bi bi-wifi me-1"></i>RFID olvasók betöltése
+          </button>`).join('')}
         </div>
       </div>
     </div>`).join('');
@@ -507,6 +515,13 @@ async function deleteOperator(id) {
   await fetch(`/api/forklift/operators/${id}`, {method:'DELETE'});
   showToast('Törölve', 'warning');
   loadOperators();
+}
+
+async function seedReaders(hallId) {
+  if (!confirm('Betölti a HK01–HK10 RFID olvasókat ehhez a csarnokhoz?')) return;
+  const r = await fetch(`/api/factory/halls/${hallId}/seed-readers`, {method:'POST'});
+  const d = await r.json();
+  showToast(`RFID olvasók betöltve: ${d.created} új`, 'success');
 }
 
 // ── Tab váltáskor töltjük be az adatokat ─────────────────────────────────────
