@@ -1,0 +1,5 @@
+adafruit-circuitpython-pn532
+requests
+RPi.GPIO
+board
+busio

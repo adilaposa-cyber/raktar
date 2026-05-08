@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RFID ATR7000 Szimulátor</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body { background: #0f172a; color: #e2e8f0; font-family: system-ui, sans-serif; }
+    .header { background: #1e293b; border-bottom: 1px solid #334155; padding: .75rem 1.5rem;
+              display: flex; align-items: center; justify-content: space-between; }
+    .header-brand { font-size: 1.1rem; font-weight: 700; color: #38bdf8; }
+    .header-brand i { margin-right: .5rem; }
+    .layout { display: grid; grid-template-columns: 1fr 340px; gap: 1rem; padding: 1rem; height: calc(100vh - 60px); overflow: hidden; }
+    .main-panel { display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; }
+    .side-panel { display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; }
+    .card-dark { background: #1e293b; border: 1px solid #334155; border-radius: .75rem; }
+    .card-dark .card-header { background: #0f172a; border-bottom: 1px solid #334155; padding: .75rem 1rem;
+                               font-weight: 600; font-size: .875rem; border-radius: .75rem .75rem 0 0; }
+    .card-dark .card-body { padding: 1rem; }
+    /* Zone grid */
+    .zone-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+    .zone-card {
+      border: 2px dashed #334155; border-radius: .75rem; min-height: 140px;
+      padding: .75rem; cursor: pointer; transition: all .2s; position: relative;
+    }
+    .zone-card:hover { border-style: solid; transform: scale(1.01); box-shadow: 0 0 20px rgba(56,189,248,.2); }
+    .zone-card.drag-over { border-style: solid; box-shadow: 0 0 25px rgba(56,189,248,.5); }
+    .zone-name { font-size: .8rem; font-weight: 700; margin-bottom: .5rem; text-transform: uppercase; letter-spacing: .05em; }
+    .zone-reader { font-size: .68rem; color: #64748b; margin-bottom: .5rem; }
+    .zone-pallets { display: flex; flex-wrap: wrap; gap: .35rem; }
+    .pallet-tag {
+      display: inline-flex; align-items: center; gap: .3rem;
+      background: rgba(255,255,255,.1); border-radius: .375rem;
+      padding: .2rem .5rem; font-size: .72rem; font-family: monospace;
+      cursor: grab; border: 1px solid rgba(255,255,255,.2); transition: all .15s;
+      user-select: none;
+    }
+    .pallet-tag:hover { background: rgba(56,189,248,.25); border-color: #38bdf8; }
+    .pallet-tag.dragging { opacity: .4; cursor: grabbing; }
+    .pallet-tag.selected { background: rgba(56,189,248,.3); border-color: #38bdf8; box-shadow: 0 0 8px rgba(56,189,248,.4); }
+    .unassigned-pool { display: flex; flex-wrap: wrap; gap: .35rem; }
+    /* Event log */
+    .event-log { max-height: 280px; overflow-y: auto; font-size: .75rem; }
+    .event-row { display: flex; gap: .5rem; padding: .35rem .5rem; border-bottom: 1px solid #1e293b;
+                 align-items: center; animation: fadeIn .3s; }
+    @keyframes fadeIn { from { background: rgba(56,189,248,.1); } to { background: transparent; } }
+    .ev-zone { background: #334155; padding: .1rem .4rem; border-radius: .25rem; font-weight: 600; min-width: 90px; text-align: center; font-size: .68rem; }
+    .ev-epc { font-family: monospace; color: #94a3b8; }
+    .ev-ok { color: #22c55e; }
+    .ev-fail { color: #ef4444; }
+    .ev-time { color: #64748b; margin-left: auto; white-space: nowrap; }
+    /* Demo step banner */
+    #demo-banner { display:none; background: #1e3a5f; border: 1px solid #38bdf8; border-radius: .5rem;
+                   padding: .75rem 1rem; color: #7dd3fc; font-size: .875rem; text-align: center; }
+    .badge-pill { border-radius: 999px; padding: .25rem .75rem; font-size: .72rem; }
+    .btn-sim { border-radius: .5rem; font-size: .8rem; padding: .35rem .75rem; }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+    /* Connection status */
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .conn-on { background: #22c55e; box-shadow: 0 0 5px #22c55e; }
+    .conn-off { background: #6b7280; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-brand"><i class="bi bi-broadcast-pin"></i>RFID ATR7000 Szimulátor</div>
+  <div class="d-flex align-items-center gap-3">
+    <span class="conn-dot conn-off" id="main-dot" title="Főalkalmazás kapcsolat"></span>
+    <small class="text-muted" id="main-label">Főapp: –</small>
+    <button class="btn btn-sm btn-outline-secondary btn-sim" data-bs-toggle="modal" data-bs-target="#settingsModal">
+      <i class="bi bi-gear me-1"></i>Beállítások
+    </button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Main panel -->
+  <div class="main-panel">
+    <!-- Demo controls -->
+    <div class="card-dark">
+      <div class="card-body d-flex align-items-center gap-3 flex-wrap">
+        <span class="fw-semibold text-info"><i class="bi bi-play-circle me-1"></i>Demo vezérlő</span>
+        <button class="btn btn-sm btn-success btn-sim" id="demo-start-btn" onclick="startDemo()">
+          <i class="bi bi-play-fill me-1"></i>Demo indítása
+        </button>
+        <button class="btn btn-sm btn-danger btn-sim d-none" id="demo-stop-btn" onclick="stopDemo()">
+          <i class="bi bi-stop-fill me-1"></i>Stop
+        </button>
+        <button class="btn btn-sm btn-outline-warning btn-sim" onclick="resetState()">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+        </button>
+        <div id="demo-banner" class="flex-grow-1"><i class="bi bi-arrow-right me-1"></i><span id="demo-step-text">–</span></div>
+      </div>
+    </div>
+
+    <!-- Unassigned pallets -->
+    <div class="card-dark">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-inbox me-2 text-secondary"></i>Nem hozzárendelt raklapok (húzd a zónába)</span>
+        <button class="btn btn-sm btn-outline-primary btn-sim" onclick="addPallet()">
+          <i class="bi bi-plus"></i> Hozzáad
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="unassigned-pool" id="unassigned-pool"></div>
+      </div>
+    </div>
+
+    <!-- Warehouse zones -->
+    <div class="card-dark">
+      <div class="card-header"><i class="bi bi-grid me-2 text-info"></i>Virtuális raktár – Zónák</div>
+      <div class="card-body">
+        <div class="zone-grid" id="zone-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Side panel -->
+  <div class="side-panel">
+    <!-- Quick move -->
+    <div class="card-dark">
+      <div class="card-header"><i class="bi bi-arrows-move me-2 text-warning"></i>Gyors áthelyezés</div>
+      <div class="card-body">
+        <label class="form-label text-muted small">Raklap (EPC)</label>
+        <select class="form-select form-select-sm mb-2 bg-dark text-light border-secondary" id="move-epc">
+          <option value="">– Válasszon –</option>
+        </select>
+        <label class="form-label text-muted small">Célzóna</label>
+        <select class="form-select form-select-sm mb-3 bg-dark text-light border-secondary" id="move-zone">
+          <option value="">– Válasszon –</option>
+        </select>
+        <button class="btn btn-warning btn-sim w-100" onclick="manualMove()">
+          <i class="bi bi-send me-1"></i>Áthelyezés + RFID esemény küldése
+        </button>
+      </div>
+    </div>
+
+    <!-- RFID Readers status -->
+    <div class="card-dark">
+      <div class="card-header"><i class="bi bi-wifi me-2 text-success"></i>Szimulált RFID olvasók</div>
+      <div class="card-body p-0">
+        <div id="readers-list"></div>
+      </div>
+    </div>
+
+    <!-- Event log -->
+    <div class="card-dark flex-grow-1">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-activity me-2 text-success"></i>Esemény napló</span>
+        <button class="btn btn-xs btn-outline-secondary btn-sim" onclick="clearLog()">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <div class="event-log" id="event-log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal fade" id="settingsModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark border-secondary text-light">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Beállítások</h5>
+        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Főalkalmazás URL</label>
+          <input class="form-control bg-dark text-light border-secondary" id="s-url" value="http://localhost:8000">
+          <small class="text-muted">Az RFID eseményeket erre a szerverre küldi a szimulátor</small>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="s-send" checked>
+          <label class="form-check-label">Esemény küldése a főalkalmazásba</label>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="saveSettings()">Mentés</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let appState = {};
+let ws;
+let selectedEPC = null;
+let dragEPC = null;
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+function connectWS() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = (e) => handleWS(JSON.parse(e.data));
+  ws.onclose = () => setTimeout(connectWS, 3000);
+}
+
+function handleWS(msg) {
+  switch(msg.type) {
+    case 'event':    addEventRow(msg.event); break;
+    case 'move':     loadState(); break;
+    case 'reset':    loadState(); clearLog(); break;
+    case 'add_pallet': loadState(); break;
+    case 'demo_start': document.getElementById('demo-banner').style.display='block'; break;
+    case 'demo_end':
+      document.getElementById('demo-banner').style.display='none';
+      document.getElementById('demo-start-btn').classList.remove('d-none');
+      document.getElementById('demo-stop-btn').classList.add('d-none');
+      break;
+    case 'demo_step':
+      document.getElementById('demo-step-text').textContent = msg.description;
+      loadState();
+      break;
+  }
+}
+
+// ── Load state ─────────────────────────────────────────────────────────────
+async function loadState() {
+  const r = await fetch('/api/state');
+  appState = await r.json();
+  renderZones();
+  renderUnassigned();
+  renderReaders();
+  renderPalletSelect();
+  renderZoneSelect();
+  // Check main app connection
+  checkMainApp();
+}
+
+async function checkMainApp() {
+  try {
+    const url = appState.main_app_url || 'http://localhost:8000';
+    const r = await fetch(url + '/api/pallets/stats/summary', {signal: AbortSignal.timeout(2000)});
+    const ok = r.ok;
+    document.getElementById('main-dot').className = `conn-dot ${ok?'conn-on':'conn-off'}`;
+    document.getElementById('main-label').textContent = `Főapp: ${ok?'ONLINE':'OFFLINE'}`;
+  } catch {
+    document.getElementById('main-dot').className = 'conn-dot conn-off';
+    document.getElementById('main-label').textContent = 'Főapp: OFFLINE';
+  }
+}
+
+// ── Render zones ───────────────────────────────────────────────────────────
+function renderZones() {
+  const grid = document.getElementById('zone-grid');
+  const zp = appState.zone_pallets || {};
+  grid.innerHTML = (appState.zones || []).map(z => {
+    const pallets = zp[z.id] || [];
+    return `<div class="zone-card" id="zone-${z.id}" style="border-color:${z.color}40"
+         ondragover="onDragOver(event,'${z.id}')" ondrop="onDrop(event,'${z.id}')"
+         ondragleave="onDragLeave('${z.id}')" onclick="zoneClick('${z.id}')">
+      <div class="zone-name" style="color:${z.color}">${z.name}</div>
+      <div class="zone-reader text-muted"><i class="bi bi-wifi" style="color:${z.color};opacity:.5"></i> ${z.id}</div>
+      <div class="zone-pallets">
+        ${pallets.map(epc => `
+          <div class="pallet-tag ${epc===selectedEPC?'selected':''}"
+               draggable="true"
+               ondragstart="onDragStart(event,'${epc}')"
+               onclick="selectPallet(event,'${epc}')">
+            <i class="bi bi-box-seam" style="font-size:.65rem"></i>${epc.replace('EPC-','')}</div>`).join('')}
+      </div>
+      ${pallets.length ? `<div style="font-size:.65rem;color:#64748b;margin-top:.35rem">${pallets.length} raklap</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderUnassigned() {
+  const pool = document.getElementById('unassigned-pool');
+  const assigned = new Set(Object.values(appState.zone_pallets||{}).flat());
+  const unassigned = (appState.all_pallets||[]).filter(e => !assigned.has(e));
+  pool.innerHTML = unassigned.length
+    ? unassigned.map(epc => `
+        <div class="pallet-tag ${epc===selectedEPC?'selected':''}"
+             draggable="true" ondragstart="onDragStart(event,'${epc}')"
+             onclick="selectPallet(event,'${epc}')">
+          <i class="bi bi-box" style="font-size:.65rem"></i>${epc.replace('EPC-','')}
+        </div>`).join('')
+    : '<span class="text-muted small">Minden raklap hozzá van rendelve</span>';
+}
+
+function renderReaders() {
+  const readers = document.getElementById('readers-list');
+  readers.innerHTML = (appState.readers||[]).map(r => `
+    <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom border-secondary">
+      <span class="conn-dot conn-on"></span>
+      <div>
+        <div style="font-size:.78rem;font-weight:600">${r.name}</div>
+        <div style="font-size:.68rem;color:#64748b">${r.id} · Zóna: ${r.zone}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderPalletSelect() {
+  const sel = document.getElementById('move-epc');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">– Válasszon –</option>';
+  (appState.all_pallets||[]).forEach(epc => {
+    const o = new Option(epc, epc);
+    if(epc === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+  if(selectedEPC) sel.value = selectedEPC;
+}
+
+function renderZoneSelect() {
+  const sel = document.getElementById('move-zone');
+  sel.innerHTML = '<option value="">– Válasszon –</option>';
+  (appState.zones||[]).forEach(z => sel.appendChild(new Option(z.name, z.id)));
+}
+
+// ── Drag & Drop ────────────────────────────────────────────────────────────
+function onDragStart(e, epc) {
+  dragEPC = epc;
+  e.dataTransfer.setData('text/plain', epc);
+  e.target.classList.add('dragging');
+}
+function onDragOver(e, zoneId) {
+  e.preventDefault();
+  document.getElementById('zone-'+zoneId)?.classList.add('drag-over');
+}
+function onDragLeave(zoneId) {
+  document.getElementById('zone-'+zoneId)?.classList.remove('drag-over');
+}
+async function onDrop(e, zoneId) {
+  e.preventDefault();
+  document.getElementById('zone-'+zoneId)?.classList.remove('drag-over');
+  const epc = e.dataTransfer.getData('text/plain') || dragEPC;
+  if(epc) await movePallet(epc, zoneId);
+  dragEPC = null;
+}
+
+// ── Click interactions ─────────────────────────────────────────────────────
+function selectPallet(e, epc) {
+  e.stopPropagation();
+  selectedEPC = epc === selectedEPC ? null : epc;
+  document.getElementById('move-epc').value = epc;
+  renderZones();
+  renderUnassigned();
+}
+
+async function zoneClick(zoneId) {
+  if(selectedEPC) {
+    await movePallet(selectedEPC, zoneId);
+    selectedEPC = null;
+  }
+}
+
+// ── Move pallet ────────────────────────────────────────────────────────────
+async function movePallet(epc, zone) {
+  const r = await fetch(`/api/move?epc=${encodeURIComponent(epc)}&to_zone=${encodeURIComponent(zone)}`, {method:'POST'});
+  const d = await r.json();
+  if(!d.ok) showAlert('Hiba: ' + d.error, 'danger');
+}
+
+async function manualMove() {
+  const epc = document.getElementById('move-epc').value;
+  const zone = document.getElementById('move-zone').value;
+  if(!epc || !zone) { showAlert('Válasszon raklapot és zónát!', 'warning'); return; }
+  await movePallet(epc, zone);
+}
+
+// ── Demo ───────────────────────────────────────────────────────────────────
+async function startDemo() {
+  document.getElementById('demo-start-btn').classList.add('d-none');
+  document.getElementById('demo-stop-btn').classList.remove('d-none');
+  document.getElementById('demo-banner').style.display = 'block';
+  await fetch('/api/demo/start', {method:'POST'});
+}
+async function stopDemo() {
+  await fetch('/api/demo/stop', {method:'POST'});
+  document.getElementById('demo-start-btn').classList.remove('d-none');
+  document.getElementById('demo-stop-btn').classList.add('d-none');
+  document.getElementById('demo-banner').style.display = 'none';
+}
+async function resetState() {
+  if(!confirm('Reset: minden raklap visszakerül a nem hozzárendelt poolba?')) return;
+  await fetch('/api/reset', {method:'POST'});
+}
+
+// ── Add pallet ─────────────────────────────────────────────────────────────
+async function addPallet() {
+  const epc = prompt('RFID EPC (pl. EPC-RAK010):');
+  if(!epc) return;
+  const r = await fetch(`/api/add-pallet?epc=${encodeURIComponent(epc)}`, {method:'POST'});
+  const d = await r.json();
+  if(d.ok) { loadState(); } else { showAlert(d.error, 'danger'); }
+}
+
+// ── Event log ──────────────────────────────────────────────────────────────
+function addEventRow(ev) {
+  const log = document.getElementById('event-log');
+  const row = document.createElement('div');
+  row.className = 'event-row';
+  row.innerHTML = `
+    <span class="ev-zone">${ev.zone}</span>
+    <span class="ev-epc">${ev.epc}</span>
+    <i class="bi bi-${ev.sent_to_main?'check-circle ev-ok':'x-circle ev-fail'}"></i>
+    <span class="ev-time">${ev.ts.substring(11,19)}</span>`;
+  log.prepend(row);
+  if(log.children.length > 60) log.lastChild.remove();
+}
+function clearLog() { document.getElementById('event-log').innerHTML=''; }
+
+// ── Settings ───────────────────────────────────────────────────────────────
+async function saveSettings() {
+  const url = document.getElementById('s-url').value;
+  const send = document.getElementById('s-send').checked;
+  await fetch(`/api/settings?main_app_url=${encodeURIComponent(url)}&send_to_main=${send}`, {method:'POST'});
+  bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+  showAlert('Beállítások mentve', 'success');
+}
+
+function showAlert(msg, type) {
+  const a = document.createElement('div');
+  a.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+  a.style.zIndex = 9999;
+  a.textContent = msg;
+  document.body.appendChild(a);
+  setTimeout(() => a.remove(), 3000);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+connectWS();
+loadState();
+setInterval(loadState, 15000);
+setInterval(checkMainApp, 10000);
+</script>
+</body>
+</html>
