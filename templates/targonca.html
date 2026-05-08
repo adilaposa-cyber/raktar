@@ -1,0 +1,459 @@
+{% extends "base.html" %}
+{% block title %}Targoncás felület{% endblock %}
+{% block page_title %}Targoncás felület{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-sm btn-outline-danger" id="logout-btn" onclick="doLogout()" style="display:none">
+  <i class="bi bi-box-arrow-right me-1"></i>Kijelentkezés
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ═══ BEJELENTKEZŐ KÉPERNYŐ ════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="row justify-content-center mt-4">
+    <div class="col-12 col-sm-10 col-md-6 col-lg-4">
+
+      <div class="card border-0 shadow-lg">
+        <div class="card-body p-4 text-center">
+          <div style="font-size:4rem;margin-bottom:.5rem">🚜</div>
+          <h4 class="fw-bold mb-1">Targoncás bejelentkezés</h4>
+          <p class="text-muted small mb-4">RFID kártyával vagy PIN kóddal</p>
+
+          <!-- RFID beolvasás -->
+          <div class="mb-4">
+            <div class="border rounded-3 p-3" style="background:#f0f9ff;border-color:#bae6fd!important">
+              <i class="bi bi-credit-card-2-front fs-2 text-primary mb-2 d-block"></i>
+              <p class="mb-2 small fw-semibold">Tartsa az RFID kártyát az olvasóhoz</p>
+              <input id="rfid-scan-input" class="form-control text-center"
+                     placeholder="RFID EPC automatikusan töltődik..."
+                     autocomplete="off" autofocus
+                     oninput="onRFIDInput(this.value)"
+                     style="font-family:monospace;font-size:.85rem">
+            </div>
+          </div>
+
+          <div class="text-muted small mb-3">– vagy –</div>
+
+          <!-- PIN bejelentkezés -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">PIN kód</label>
+            <div class="d-flex gap-2 justify-content-center mb-2">
+              <input id="pin-input" type="password" class="form-control text-center fw-bold"
+                     maxlength="6" placeholder="● ● ● ●"
+                     style="font-size:1.5rem;letter-spacing:.5rem;max-width:180px"
+                     oninput="if(this.value.length>=4) pinLogin(this.value)">
+            </div>
+            <!-- PIN pad -->
+            <div class="d-grid gap-1" style="grid-template-columns:repeat(3,1fr);display:grid;max-width:220px;margin:0 auto">
+              {% for n in ['1','2','3','4','5','6','7','8','9','','0','⌫'] %}
+              <button class="btn btn-outline-secondary py-2 fw-bold"
+                      onclick="pinPad('{{ n }}')">{{ n }}</button>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Targonca szám -->
+          <div class="mb-3">
+            <label class="form-label small">Targonca azonosító (opcionális)</label>
+            <input id="forklift-num-input" class="form-control text-center" placeholder="pl. TG-01">
+          </div>
+
+          <div id="login-error" class="alert alert-danger py-2 d-none small"></div>
+        </div>
+      </div>
+
+      <!-- Operátorok gyors választása (fejlesztői segédlet) -->
+      <div class="card border-0 shadow-sm mt-3">
+        <div class="card-header bg-transparent border-0 py-2">
+          <small class="text-muted fw-semibold"><i class="bi bi-people me-1"></i>Regisztrált kezelők</small>
+        </div>
+        <div class="card-body p-0" id="operator-list-login">
+          <div class="text-center text-muted py-3 small">Betöltés...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MUNKA KÉPERNYŐ (bejelentkezés után) ══════════════════════════════════ -->
+<div id="work-screen" style="display:none">
+
+  <!-- Kezelő banner -->
+  <div class="alert border-0 mb-3 py-2" style="background:linear-gradient(135deg,#1e40af,#3b82f6);color:white">
+    <div class="d-flex align-items-center gap-3">
+      <span style="font-size:2.5rem">🚜</span>
+      <div class="flex-grow-1">
+        <div class="fw-bold fs-5" id="ws-operator-name">–</div>
+        <div class="small opacity-75">Targonca: <span id="ws-forklift-num">–</span></div>
+      </div>
+      <div class="text-end">
+        <div class="fw-semibold" id="ws-time">–</div>
+        <div class="small opacity-75">Bejelentkezve</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gyors műveletek -->
+  <div class="row g-2 mb-3">
+    <div class="col-6">
+      <button class="btn btn-warning w-100 py-3 fw-bold" onclick="loadMyTasks()">
+        <i class="bi bi-list-task d-block fs-3 mb-1"></i>Feladataim
+      </button>
+    </div>
+    <div class="col-6">
+      <button class="btn btn-success w-100 py-3 fw-bold" data-bs-toggle="modal" data-bs-target="#quickMoveModal">
+        <i class="bi bi-arrows-move d-block fs-3 mb-1"></i>Kocsi mozgatás
+      </button>
+    </div>
+    <div class="col-6">
+      <button class="btn btn-primary w-100 py-3 fw-bold" onclick="loadFloorStatus()">
+        <i class="bi bi-diagram-3 d-block fs-3 mb-1"></i>Szinterkép
+      </button>
+    </div>
+    <div class="col-6">
+      <button class="btn btn-outline-secondary w-100 py-3 fw-bold" onclick="doLogout()">
+        <i class="bi bi-box-arrow-right d-block fs-3 mb-1"></i>Kijelentkezés
+      </button>
+    </div>
+  </div>
+
+  <!-- Feladatok panel -->
+  <div class="card border-0 shadow-sm mb-3" id="tasks-panel">
+    <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+      <h6 class="mb-0"><i class="bi bi-list-task me-2 text-warning"></i>Feladataim</h6>
+      <span class="badge bg-warning text-dark" id="task-count">0</span>
+    </div>
+    <div class="card-body p-0" id="task-list">
+      <div class="text-center text-muted py-4 small">
+        <i class="bi bi-check-circle fs-2 d-block mb-2 text-success"></i>
+        Nincs aktuális feladat
+      </div>
+    </div>
+  </div>
+
+  <!-- Aktív targoncások -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-transparent border-0">
+      <h6 class="mb-0"><i class="bi bi-truck-front-fill me-2 text-primary"></i>Aktív targoncások</h6>
+    </div>
+    <div class="card-body p-0" id="active-sessions-list">
+      <div class="text-center text-muted py-3 small">Betöltés...</div>
+    </div>
+  </div>
+
+  <!-- Szinterkép összefoglaló -->
+  <div class="card border-0 shadow-sm d-none" id="floor-status-panel">
+    <div class="card-header bg-transparent border-0">
+      <h6 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Szerelde állapot</h6>
+    </div>
+    <div class="card-body p-0" id="floor-status-body"></div>
+  </div>
+</div>
+
+<!-- Gyors mozgatás modal -->
+<div class="modal fade" id="quickMoveModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-arrows-move me-2"></i>Kocsi mozgatás</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Kocsi kiválasztása</label>
+          <select class="form-select form-select-lg" id="qm-cart">
+            <option value="">– Válasszon kocsit –</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Cél pozíció</label>
+          <select class="form-select form-select-lg" id="qm-pos">
+            <option value="HÁTRALÉKOS">HÁTRALÉKOS</option>
+            <option value="1423">JD – 1423</option>
+            <option value="1424">JD – 1424</option>
+            <option value="1425">JD – 1425</option>
+            <option value="1426">JD – 1426</option>
+            <option value="1427">JD – 1427</option>
+            <option value="1428">JD – 1428</option>
+            <option value="1429">JD – 1429</option>
+            <option value="1323">KSR – 1323</option>
+            <option value="1324">KSR – 1324</option>
+            <option value="1325">KSR – 1325</option>
+            <option value="1326">KSR – 1326</option>
+            <option value="1327">KSR – 1327</option>
+            <option value="1328">KSR – 1328</option>
+            <option value="1329">KSR – 1329</option>
+            <option value="1330">KSR – 1330</option>
+            <option value="FOLYOSÓ">FOLYOSÓ</option>
+            <option value="KÉSZ">KÉSZ</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-success btn-lg" onclick="doQuickMove()">
+          <i class="bi bi-check-lg me-1"></i>Mozgatás rögzítése
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let sessionId = localStorage.getItem('forklift_session_id');
+let sessionData = null;
+let rfidBuffer = '';
+let rfidTimer = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async function init() {
+  loadOperatorList();
+  if (sessionId) {
+    // Ellenőrizzük, hogy a szekció még aktív-e
+    const r = await fetch('/api/forklift/sessions/active');
+    const sessions = await r.json();
+    const mine = sessions.find(s => s.id == sessionId);
+    if (mine) {
+      showWorkScreen(mine);
+      return;
+    } else {
+      localStorage.removeItem('forklift_session_id');
+      sessionId = null;
+    }
+  }
+  showLoginScreen();
+})();
+
+// ── Képernyőváltás ────────────────────────────────────────────────────────────
+function showLoginScreen() {
+  document.getElementById('login-screen').style.display = '';
+  document.getElementById('work-screen').style.display = 'none';
+  document.getElementById('logout-btn').style.display = 'none';
+}
+
+function showWorkScreen(sess) {
+  sessionData = sess;
+  sessionId = sess.id;
+  localStorage.setItem('forklift_session_id', sess.id);
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('work-screen').style.display = '';
+  document.getElementById('logout-btn').style.display = '';
+  document.getElementById('ws-operator-name').textContent = sess.operator_name;
+  document.getElementById('ws-forklift-num').textContent = sess.forklift_number || '–';
+  document.getElementById('ws-time').textContent =
+    sess.started_at ? new Date(sess.started_at).toLocaleTimeString('hu-HU', {hour:'2-digit',minute:'2-digit'}) : '–';
+  loadMyTasks();
+  loadActiveSessions();
+  loadCartList();
+}
+
+// ── RFID scan input (USB RFID olvasó billentyűzetként jelenik meg) ─────────
+function onRFIDInput(val) {
+  clearTimeout(rfidTimer);
+  rfidTimer = setTimeout(() => {
+    if (val.length > 3) rfidLogin(val);
+    document.getElementById('rfid-scan-input').value = '';
+  }, 300);
+}
+
+// ── RFID bejelentkezés ────────────────────────────────────────────────────────
+async function rfidLogin(epc) {
+  await doLogin({ rfid_epc: epc });
+}
+
+// ── PIN pad ───────────────────────────────────────────────────────────────────
+function pinPad(ch) {
+  const inp = document.getElementById('pin-input');
+  if (ch === '⌫') { inp.value = inp.value.slice(0, -1); return; }
+  if (!ch) return;
+  inp.value += ch;
+  if (inp.value.length >= 4) pinLogin(inp.value);
+}
+
+async function pinLogin(pin) {
+  await doLogin({ pin_code: pin });
+  document.getElementById('pin-input').value = '';
+}
+
+// ── Bejelentkezés API hívás ───────────────────────────────────────────────────
+async function doLogin(params) {
+  const forklift = document.getElementById('forklift-num-input')?.value?.trim() || '';
+  if (forklift) params.forklift_number = forklift;
+
+  const qs = new URLSearchParams(params);
+  const r = await fetch(`/api/forklift/login?${qs}`, { method: 'POST' });
+  if (r.ok) {
+    const data = await r.json();
+    document.getElementById('login-error').classList.add('d-none');
+    showWorkScreen({ ...data, operator_name: data.operator.name });
+  } else {
+    const err = await r.json();
+    const el = document.getElementById('login-error');
+    el.textContent = err.detail || 'Ismeretlen hiba';
+    el.classList.remove('d-none');
+    setTimeout(() => el.classList.add('d-none'), 3000);
+  }
+}
+
+// ── Gyors bejelentkezés az operátor listából ──────────────────────────────────
+async function quickLoginAs(operatorId, name) {
+  if (!confirm(`Bejelentkezés mint: ${name}?`)) return;
+  // Az operátor saját RFID-jével: itt admin módban közvetlenül session-t hozunk létre
+  // Normál esetben a fizikai RFID kártyát kell beolvasni
+  showToast(`${name} bejelentkezve`, 'success');
+}
+
+// ── Kijelentkezés ─────────────────────────────────────────────────────────────
+async function doLogout() {
+  if (!sessionId) { showLoginScreen(); return; }
+  await fetch(`/api/forklift/logout/${sessionId}`, { method: 'POST' });
+  sessionId = null;
+  sessionData = null;
+  localStorage.removeItem('forklift_session_id');
+  showLoginScreen();
+  showToast('Kijelentkezve', 'info');
+}
+
+// ── Feladatok betöltése ───────────────────────────────────────────────────────
+async function loadMyTasks() {
+  if (!sessionId) return;
+  const r = await fetch(`/api/forklift/tasks/${sessionId}`);
+  if (!r.ok) return;
+  const tasks = await r.json();
+  document.getElementById('task-count').textContent = tasks.length;
+  const list = document.getElementById('task-list');
+  list.innerHTML = tasks.length ? tasks.map(t => `
+    <div class="p-3 border-bottom">
+      <div class="d-flex align-items-start gap-2">
+        <span class="badge bg-${t.priority<=2?'danger':t.priority<=5?'warning':'secondary'} mt-1">${t.priority}</span>
+        <div class="flex-grow-1">
+          <div class="fw-semibold">${t.task_number || 'FELADAT-'+t.id}</div>
+          <div class="small text-muted">${t.from_zone||'?'} → ${t.to_zone||'?'}</div>
+          ${t.pallet_number ? `<div class="small"><code>${t.pallet_number}</code></div>` : ''}
+          ${t.notes ? `<div class="small text-muted">${t.notes}</div>` : ''}
+        </div>
+        <button class="btn btn-success btn-sm" onclick="completeTask(${t.id})">
+          <i class="bi bi-check-lg"></i>
+        </button>
+      </div>
+    </div>`).join('') :
+    '<div class="text-center text-muted py-4 small"><i class="bi bi-check-circle fs-2 d-block mb-2 text-success"></i>Nincs aktuális feladat</div>';
+}
+
+async function completeTask(taskId) {
+  const r = await fetch(`/api/forklift/tasks/${taskId}/complete?session_id=${sessionId}`, {method:'POST'});
+  if (r.ok) { showToast('Feladat elvégezve!', 'success'); loadMyTasks(); }
+}
+
+// ── Aktív targoncások ─────────────────────────────────────────────────────────
+async function loadActiveSessions() {
+  const r = await fetch('/api/forklift/sessions/active');
+  const sessions = await r.json();
+  const el = document.getElementById('active-sessions-list');
+  el.innerHTML = sessions.length ? sessions.map(s => `
+    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom">
+      <span style="font-size:1.5rem">🚜</span>
+      <div>
+        <div class="fw-semibold">${s.operator_name}</div>
+        <div class="small text-muted">Targonca: ${s.forklift_number||'–'} · ${s.started_at ? new Date(s.started_at).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}) : '–'}</div>
+      </div>
+    </div>`).join('') :
+    '<div class="text-center text-muted py-3 small">Nincs aktív targoncás</div>';
+}
+
+// ── Szerelde állapot ──────────────────────────────────────────────────────────
+async function loadFloorStatus() {
+  const panel = document.getElementById('floor-status-panel');
+  panel.classList.remove('d-none');
+  const r = await fetch('/api/carts/floor-plan');
+  const data = await r.json();
+  const body = document.getElementById('floor-status-body');
+  const positions = Object.entries(data.position_map)
+    .filter(([pos, carts]) => carts.length > 0)
+    .sort((a, b) => b[1].length - a[1].length);
+  body.innerHTML = positions.map(([pos, carts]) => `
+    <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom">
+      <span class="badge bg-secondary">${pos}</span>
+      <div class="flex-grow-1 small">${carts.map(c => `<span class="badge me-1" style="background:#f59e0b">${c.cart_number}</span>`).join('')}</div>
+      <span class="text-muted small">${carts.length} db</span>
+    </div>`).join('') ||
+    '<div class="text-center text-muted py-3 small">Nincs kocsi a szereldén</div>';
+}
+
+// ── Kocsik betöltése a gyors mozgatáshoz ─────────────────────────────────────
+async function loadCartList() {
+  const r = await fetch('/api/carts/floor-plan');
+  const data = await r.json();
+  const all = Object.values(data.position_map).flat();
+  const sel = document.getElementById('qm-cart');
+  sel.innerHTML = '<option value="">– Válasszon kocsit –</option>' +
+    all.map(c => `<option value="${c.id}">${c.cart_number} (${c.current_position||'?'})</option>`).join('');
+}
+
+async function doQuickMove() {
+  const cartId = document.getElementById('qm-cart').value;
+  const pos = document.getElementById('qm-pos').value;
+  if (!cartId || !pos) { showToast('Kocsi és pozíció kötelező!', 'danger'); return; }
+  const operator = sessionData?.operator_name || 'targoncás';
+  const r = await fetch(`/api/carts/${cartId}/move?to_position=${pos}&operator=${encodeURIComponent(operator)}`, {method:'POST'});
+  if (r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('quickMoveModal'))?.hide();
+    showToast(`Kocsi mozgatva → ${pos}`, 'success');
+    loadCartList();
+    loadFloorStatus();
+  } else { showToast('Hiba!', 'danger'); }
+}
+
+// ── Operátorlista a login képernyőn ──────────────────────────────────────────
+async function loadOperatorList() {
+  const r = await fetch('/api/forklift/operators');
+  if (!r.ok) return;
+  const ops = await r.json();
+  const el = document.getElementById('operator-list-login');
+  el.innerHTML = ops.length ? ops.map(op => `
+    <div class="d-flex align-items-center gap-3 px-3 py-2 border-bottom">
+      <span>👤</span>
+      <div class="flex-grow-1">
+        <div class="fw-semibold small">${op.name}</div>
+        <div class="text-muted" style="font-size:.72rem">${op.employee_id} · Targonca: ${op.forklift_number||'–'}</div>
+      </div>
+      <span class="badge bg-secondary small">${op.rfid_epc ? 'RFID' : 'PIN'}</span>
+    </div>`).join('') :
+    '<div class="text-center text-muted py-3 small">Nincs regisztrált targoncás kezelő.<br><a href="/factory-admin">Kezelők felvétele →</a></div>';
+}
+
+// ── WebSocket frissítések ─────────────────────────────────────────────────────
+window.onRFIDEvent = function(evt) {
+  if (evt.type === 'cart_move' && sessionId) {
+    showToast(`🚜 ${evt.cart_number}: ${evt.from||'?'} → ${evt.to}`, 'info');
+    loadMyTasks();
+    loadActiveSessions();
+  }
+  if (evt.type === 'forklift_login') {
+    loadActiveSessions();
+    showToast(`🚜 ${evt.operator} bejelentkezett`, 'secondary');
+  }
+  if (evt.type === 'forklift_logout') {
+    loadActiveSessions();
+  }
+};
+
+// Periódikus frissítés
+setInterval(() => {
+  if (sessionId) { loadMyTasks(); loadActiveSessions(); }
+}, 30000);
+</script>
+
+<style>
+/* Mobil optimalizáció */
+@media (max-width: 768px) {
+  .main-wrap { margin-left: 0 !important; }
+  .sidebar { transform: translateX(-100%); }
+}
+</style>
+{% endblock %}

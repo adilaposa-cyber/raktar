@@ -3,6 +3,9 @@
 {% block page_title %}Komissiózó kocsi nyomonkövetés – Szerelde alaprajz{% endblock %}
 
 {% block topbar_actions %}
+<button class="btn btn-sm btn-outline-warning me-1" onclick="toggleShimOverlay()" id="shim-toggle-btn" title="Hézagoló lemez igény megjelenítése">
+  <i class="bi bi-layers me-1"></i>Hézagoló lemezek
+</button>
 <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addCartModal">
   <i class="bi bi-plus-lg me-1"></i>Kocsi felvétele
 </button>
@@ -177,6 +180,9 @@
             <!-- ═══ Dinamikus kocsi ikonok ─ JS tölti be ═══════════════════════ -->
             <g id="carts-layer"></g>
 
+            <!-- ═══ Hézagoló lemez overlay ─ JS tölti be ════════════════════════ -->
+            <g id="shim-layer" style="display:none"></g>
+
           </svg>
         </div>
       </div>
@@ -185,6 +191,14 @@
 
   <!-- Side panel -->
   <div class="col-xl-3">
+    <!-- Hézagoló lemez összefoglaló -->
+    <div class="card border-0 shadow-sm mb-3 d-none" id="shim-summary-card">
+      <div class="card-header bg-transparent border-0 py-2">
+        <h6 class="mb-0 small"><i class="bi bi-layers me-2 text-warning"></i>Hézagoló lemez igény</h6>
+      </div>
+      <div class="card-body p-0" id="shim-summary-list" style="max-height:200px;overflow-y:auto"></div>
+    </div>
+
     <!-- HK Olvasók -->
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-transparent border-0 py-2">
@@ -510,8 +524,61 @@ window.onRFIDEvent = function(evt) {
   }
 };
 
+// ── Hézagoló lemez overlay ────────────────────────────────────────────────
+let workstations = [];
+let shimVisible = false;
+
+async function loadWorkstations() {
+  const r = await fetch('/api/factory/workstations');
+  if (r.ok) workstations = await r.json();
+}
+
+function toggleShimOverlay() {
+  shimVisible = !shimVisible;
+  const layer = document.getElementById('shim-layer');
+  const card = document.getElementById('shim-summary-card');
+  const btn = document.getElementById('shim-toggle-btn');
+  layer.style.display = shimVisible ? '' : 'none';
+  card.classList.toggle('d-none', !shimVisible);
+  btn.classList.toggle('btn-warning', shimVisible);
+  btn.classList.toggle('btn-outline-warning', !shimVisible);
+  if (shimVisible) renderShimOverlay();
+}
+
+function renderShimOverlay() {
+  const layer = document.getElementById('shim-layer');
+  const list = document.getElementById('shim-summary-list');
+  layer.innerHTML = '';
+
+  const shimStations = workstations.filter(ws => ws.shim_required);
+  shimStations.forEach(ws => {
+    const center = POS_CENTERS[ws.code];
+    if (!center) return;
+    // Sárga overlay badge az állás sarkában
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.innerHTML = `
+      <rect x="${center.x+5}" y="${center.y-38}" width="36" height="18" fill="#f59e0b" rx="3" opacity="0.95"/>
+      <text x="${center.x+23}" y="${center.y-26}" text-anchor="middle" font-size="8" fill="white" font-weight="700">
+        <tspan>🔧</tspan> ${ws.shim_quantity}
+      </text>`;
+    layer.appendChild(g);
+  });
+
+  // Összefoglaló lista
+  list.innerHTML = shimStations.length ? shimStations.map(ws => `
+    <div class="d-flex align-items-start gap-2 px-3 py-2 border-bottom" style="font-size:.78rem">
+      <span class="badge mt-1" style="background:${ws.assembly_line==='4270'?'#2563eb':'#d97706'};min-width:36px">${ws.code}</span>
+      <div class="flex-grow-1">
+        <div class="fw-semibold">${ws.shim_quantity} db szükséges</div>
+        <div class="text-muted">${ws.shim_description||'Nincs leírás'}</div>
+      </div>
+    </div>`).join('') :
+    '<div class="text-center text-muted py-3 small">Nincs hézagoló lemez igény rögzítve.<br><a href="/factory-admin">Admin →</a></div>';
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 loadFloorPlan();
+loadWorkstations();
 setInterval(loadFloorPlan, 15000);
 </script>
 

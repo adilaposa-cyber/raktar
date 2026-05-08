@@ -1,0 +1,524 @@
+{% extends "base.html" %}
+{% block title %}Üzem admin{% endblock %}
+{% block page_title %}Üzem struktúra & Munkaállomások{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-sm btn-success" onclick="seedDefault()" title="Szerelde alaprajz betöltése">
+  <i class="bi bi-magic me-1"></i>Alapadatok betöltése
+</button>
+<button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addFactoryModal">
+  <i class="bi bi-plus-lg me-1"></i>Üzem
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" id="admin-tabs">
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-overview">
+    <i class="bi bi-diagram-3 me-1"></i>Áttekintés</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-workstations">
+    <i class="bi bi-grid me-1"></i>Munkaállomások</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-forklifts">
+    <i class="bi bi-truck-front-fill me-1"></i>Targoncások</a></li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- ─── ÁTTEKINTÉS TAB ────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade show active" id="tab-overview">
+    <div class="row g-3" id="factory-tree">
+      <div class="col-12 text-center text-muted py-5">
+        <div class="spinner-border spinner-border-sm me-2"></div>Betöltés...
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── MUNKAÁLLOMÁSOK TAB ───────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="tab-workstations">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div class="d-flex gap-2">
+        <select class="form-select form-select-sm w-auto" id="ws-line-filter" onchange="loadWorkstations()">
+          <option value="">Minden sor</option>
+          <option value="4270">JD 4270</option>
+          <option value="4392">KSR 4392</option>
+        </select>
+      </div>
+      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addWSModal">
+        <i class="bi bi-plus-lg me-1"></i>Új munkaállomás
+      </button>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Kód</th><th>Név</th><th>Sor</th><th>Típus</th>
+                <th>Hézagoló lemez</th><th>Megjegyzés</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="ws-tbody">
+              <tr><td colspan="7" class="text-center text-muted py-3">Betöltés...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── TARGONCÁSOK TAB ──────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="tab-forklifts">
+    <div class="d-flex justify-content-end mb-3">
+      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addOperatorModal">
+        <i class="bi bi-plus-lg me-1"></i>Új targoncás kezelő
+      </button>
+    </div>
+
+    <div class="row g-3" id="operators-list">
+      <div class="col-12 text-center text-muted py-4">Betöltés...</div>
+    </div>
+
+    <hr class="my-4">
+    <h6 class="fw-semibold mb-3"><i class="bi bi-clock-history me-2"></i>Szekció napló</h6>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr><th>Kezelő</th><th>Targonca</th><th>Bejelentkezés</th><th>Kijelentkezés</th><th>Állapot</th></tr>
+            </thead>
+            <tbody id="session-history-tbody">
+              <tr><td colspan="5" class="text-center text-muted py-3">Betöltés...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODÁLOK ══════════════════════════════════════════════════════════════ -->
+
+<!-- Üzem létrehozása -->
+<div class="modal fade" id="addFactoryModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Üzem létrehozása</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Kód *</label>
+          <input class="form-control" id="f-code" placeholder="pl. SZERELDE"></div>
+        <div class="mb-3"><label class="form-label">Megnevezés *</label>
+          <input class="form-control" id="f-name" placeholder="pl. Szerelde Csarnok"></div>
+        <div class="mb-3"><label class="form-label">Cím</label>
+          <input class="form-control" id="f-address"></div>
+        <div class="mb-3"><label class="form-label">Leírás</label>
+          <textarea class="form-control" id="f-desc" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="createFactory()">Mentés</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Munkaállomás létrehozása / szerkesztése -->
+<div class="modal fade" id="addWSModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="ws-modal-title">Munkaállomás</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="ws-edit-id">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">Kód *</label>
+            <input class="form-control" id="ws-code" placeholder="pl. 1423"></div>
+          <div class="col-md-8">
+            <label class="form-label">Megnevezés</label>
+            <input class="form-control" id="ws-name" placeholder="pl. JD 1423 – Hajtómű szerelés"></div>
+          <div class="col-md-4">
+            <label class="form-label">Szerelési sor</label>
+            <select class="form-select" id="ws-line">
+              <option value="">– Nem megadott –</option>
+              <option value="4270">4270 John Deere</option>
+              <option value="4392">4392 Középsorozatú</option>
+            </select></div>
+          <div class="col-md-4">
+            <label class="form-label">Típus</label>
+            <select class="form-select" id="ws-type">
+              <option value="assembly">Szerelő</option>
+              <option value="storage">Raktár</option>
+              <option value="transit">Tranzit / folyosó</option>
+              <option value="finished">Kész területe</option>
+            </select></div>
+          <div class="col-md-4">
+            <label class="form-label">Szín</label>
+            <input type="color" class="form-control form-control-color w-100" id="ws-color" value="#3b82f6"></div>
+
+          <!-- Hézagoló lemez -->
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="ws-shim-req" onchange="toggleShim(this.checked)">
+              <label class="form-check-label fw-semibold">
+                <i class="bi bi-layers me-1 text-warning"></i>Hézagoló lemez szükséges ennél az állomásnál
+              </label>
+            </div>
+          </div>
+          <div id="shim-fields" style="display:none" class="col-12">
+            <div class="row g-2">
+              <div class="col-md-8">
+                <label class="form-label">Hézagoló lemez leírása</label>
+                <input class="form-control" id="ws-shim-desc" placeholder="pl. 0.3mm acél hézagoló, 80x40mm"></div>
+              <div class="col-md-4">
+                <label class="form-label">Szükséges mennyiség</label>
+                <input type="number" class="form-control" id="ws-shim-qty" value="0" min="0"></div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Megjegyzés</label>
+            <textarea class="form-control" id="ws-notes" rows="2"></textarea></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="saveWorkstation()">Mentés</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Targoncás kezelő felvétele -->
+<div class="modal fade" id="addOperatorModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Targoncás kezelő felvétele</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Teljes név *</label>
+          <input class="form-control" id="op-name" placeholder="pl. Kovács János"></div>
+        <div class="mb-3"><label class="form-label">Alkalmazotti szám *</label>
+          <input class="form-control" id="op-empid" placeholder="pl. A-1042"></div>
+        <div class="mb-3"><label class="form-label">RFID belépő kártya EPC</label>
+          <input class="form-control" id="op-rfid" placeholder="pl. E200...">
+          <div class="form-text">Olvassa be a kártyát, vagy adja meg kézzel</div></div>
+        <div class="mb-3"><label class="form-label">PIN kód (4-6 jegyű)</label>
+          <input class="form-control" id="op-pin" type="password" maxlength="6" placeholder="Alternatív bejelentkezés"></div>
+        <div class="mb-3"><label class="form-label">Hozzárendelt targonca</label>
+          <input class="form-control" id="op-forklift" placeholder="pl. TG-01"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-primary" onclick="createOperator()">Mentés</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+
+// ── Üzem fa betöltése ─────────────────────────────────────────────────────────
+async function loadOverview() {
+  const r = await fetch('/api/factory/overview');
+  const data = await r.json();
+  const container = document.getElementById('factory-tree');
+
+  if (!data.factories.length && !data.standalone_workstations.length) {
+    container.innerHTML = `
+      <div class="col-12 text-center py-5">
+        <i class="bi bi-buildings fs-1 text-muted d-block mb-3"></i>
+        <p class="text-muted">Nincs még üzem konfigurálva.</p>
+        <button class="btn btn-success" onclick="seedDefault()">
+          <i class="bi bi-magic me-1"></i>Szerelde alapadatok betöltése
+        </button>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = data.factories.map(f => `
+    <div class="col-12">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-buildings me-2 text-primary"></i>${f.name}
+            <code class="ms-2 small text-muted">${f.code}</code></h6>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteFactory(${f.id})">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+        <div class="card-body p-0">
+          ${f.halls.map(h => `
+            <div class="border-bottom px-3 py-2">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge" style="background:${h.color}">${h.code}</span>
+                <strong>${h.name}</strong>
+                <button class="btn btn-xs btn-outline-danger ms-auto" onclick="deleteHall(${h.id})" style="padding:1px 6px;font-size:.7rem">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+              <div class="d-flex flex-wrap gap-2 ps-2">
+                ${h.workstations.map(ws => `
+                  <div class="card border" style="min-width:160px;border-left:4px solid ${ws.color||'#6b7280'}!important">
+                    <div class="card-body py-2 px-3">
+                      <div class="fw-bold">${ws.code}</div>
+                      <div class="small text-muted">${ws.name||'–'}</div>
+                      ${ws.shim_required ? `<div class="small mt-1"><span class="badge bg-warning-subtle text-warning"><i class="bi bi-layers me-1"></i>Hézagoló: ${ws.shim_quantity} db</span></div>` : ''}
+                      <div class="d-flex gap-1 mt-1">
+                        <button class="btn btn-xs btn-outline-primary" style="padding:1px 6px;font-size:.7rem" onclick="editWS(${JSON.stringify(ws).replace(/"/g,'&quot;')})"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-xs btn-outline-danger" style="padding:1px 6px;font-size:.7rem" onclick="deleteWS(${ws.id})"><i class="bi bi-trash"></i></button>
+                      </div>
+                    </div>
+                  </div>`).join('')}
+                <button class="btn btn-outline-secondary btn-sm" style="height:fit-content;align-self:center"
+                  onclick="openAddWS('${h.id}')"><i class="bi bi-plus"></i></button>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div class="card-footer bg-transparent">
+          <button class="btn btn-sm btn-outline-primary" onclick="openAddHall(${f.id})">
+            <i class="bi bi-plus me-1"></i>Csarnok hozzáadása
+          </button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Munkaállomások tábla ──────────────────────────────────────────────────────
+async function loadWorkstations() {
+  const line = document.getElementById('ws-line-filter').value;
+  let url = '/api/factory/workstations';
+  if (line) url += `?assembly_line=${line}`;
+  const r = await fetch(url);
+  const wss = await r.json();
+  const tbody = document.getElementById('ws-tbody');
+  tbody.innerHTML = wss.map(ws => `
+    <tr>
+      <td><strong>${ws.code}</strong></td>
+      <td>${ws.name||'–'}</td>
+      <td>${ws.assembly_line ? `<span class="badge" style="background:${ws.assembly_line==='4270'?'#2563eb':'#d97706'}">${ws.assembly_line}</span>` : '–'}</td>
+      <td><span class="badge bg-secondary">${ws.station_type||'assembly'}</span></td>
+      <td>${ws.shim_required
+        ? `<span class="text-warning fw-semibold"><i class="bi bi-layers me-1"></i>${ws.shim_quantity} db</span><br><small class="text-muted">${ws.shim_description||''}</small>`
+        : '<span class="text-muted">–</span>'}</td>
+      <td class="small text-muted">${ws.notes||''}</td>
+      <td>
+        <button class="btn btn-sm btn-outline-primary me-1" onclick="editWS(${JSON.stringify(ws).replace(/"/g,'&quot;')})"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteWS(${ws.id})"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`).join('') ||
+    '<tr><td colspan="7" class="text-center text-muted py-3">Nincs munkaállomás</td></tr>';
+}
+
+// ── Targoncások ───────────────────────────────────────────────────────────────
+async function loadOperators() {
+  const r = await fetch('/api/forklift/operators');
+  const ops = await r.json();
+  const el = document.getElementById('operators-list');
+  el.innerHTML = ops.length ? ops.map(op => `
+    <div class="col-md-4 col-lg-3">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-3">
+          <div style="font-size:2.5rem">👤</div>
+          <div class="fw-bold">${op.name}</div>
+          <div class="text-muted small">${op.employee_id}</div>
+          <div class="mt-2 d-flex flex-wrap gap-1 justify-content-center">
+            ${op.rfid_epc ? `<span class="badge bg-primary-subtle text-primary small"><i class="bi bi-credit-card me-1"></i>RFID</span>` : ''}
+            ${op.forklift_number ? `<span class="badge bg-secondary-subtle text-secondary small"><i class="bi bi-truck-front-fill me-1"></i>${op.forklift_number}</span>` : ''}
+          </div>
+          <button class="btn btn-sm btn-outline-danger mt-2" onclick="deleteOperator(${op.id})">
+            <i class="bi bi-trash me-1"></i>Törlés
+          </button>
+        </div>
+      </div>
+    </div>`).join('') :
+    '<div class="col-12 text-center text-muted py-4">Nincs regisztrált targoncás kezelő.<br>Kattintson az "Új targoncás kezelő" gombra.</div>';
+}
+
+async function loadSessionHistory() {
+  const r = await fetch('/api/forklift/sessions/history?limit=20');
+  const sessions = await r.json();
+  const tbody = document.getElementById('session-history-tbody');
+  tbody.innerHTML = sessions.length ? sessions.map(s => `
+    <tr>
+      <td class="fw-semibold">${s.operator_name}</td>
+      <td>${s.forklift_number||'–'}</td>
+      <td class="small text-muted">${s.started_at ? new Date(s.started_at).toLocaleString('hu-HU') : '–'}</td>
+      <td class="small text-muted">${s.ended_at ? new Date(s.ended_at).toLocaleString('hu-HU') : '–'}</td>
+      <td><span class="badge ${s.active ? 'bg-success' : 'bg-secondary'}">${s.active ? 'Aktív' : 'Vége'}</span></td>
+    </tr>`).join('') :
+    '<tr><td colspan="5" class="text-center text-muted py-3">Nincs napló</td></tr>';
+}
+
+// ── CRUD műveletek ────────────────────────────────────────────────────────────
+async function seedDefault() {
+  if (!confirm('Betölti a valódi szerelde alaprajzot (JD 4270 + KSR 4392 állások)?\nA meglévő adatokat nem törli.')) return;
+  const r = await fetch('/api/factory/seed-default', {method:'POST'});
+  const d = await r.json();
+  showToast(`Alapadatok betöltve: ${d.created} új rekord`, 'success');
+  loadOverview();
+  loadWorkstations();
+}
+
+async function createFactory() {
+  const params = new URLSearchParams({
+    code: document.getElementById('f-code').value.trim().toUpperCase(),
+    name: document.getElementById('f-name').value.trim(),
+    address: document.getElementById('f-address').value.trim(),
+    description: document.getElementById('f-desc').value.trim(),
+  });
+  const r = await fetch(`/api/factory/factories?${params}`, {method:'POST'});
+  if (r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('addFactoryModal')).hide();
+    showToast('Üzem létrehozva', 'success');
+    loadOverview();
+  } else { const e = await r.json(); showToast(e.detail||'Hiba!', 'danger'); }
+}
+
+async function deleteFactory(id) {
+  if (!confirm('Biztosan törli az üzemet?')) return;
+  await fetch(`/api/factory/factories/${id}`, {method:'DELETE'});
+  showToast('Törölve', 'warning');
+  loadOverview();
+}
+
+function openAddHall(factoryId) {
+  const name = prompt('Csarnok megnevezése:');
+  if (!name) return;
+  const code = prompt('Csarnok kód (pl. JD4270):')?.toUpperCase();
+  if (!code) return;
+  fetch(`/api/factory/halls?code=${code}&name=${encodeURIComponent(name)}&factory_id=${factoryId}`, {method:'POST'})
+    .then(r => r.json())
+    .then(() => { showToast('Csarnok hozzáadva', 'success'); loadOverview(); });
+}
+
+async function deleteHall(id) {
+  if (!confirm('Biztosan törli a csarnokot?')) return;
+  await fetch(`/api/factory/halls/${id}`, {method:'DELETE'});
+  showToast('Törölve', 'warning');
+  loadOverview();
+}
+
+function openAddWS(hallId) {
+  document.getElementById('ws-edit-id').value = '';
+  document.getElementById('ws-modal-title').textContent = 'Munkaállomás hozzáadása';
+  document.getElementById('ws-code').value = '';
+  document.getElementById('ws-name').value = '';
+  document.getElementById('ws-line').value = '';
+  document.getElementById('ws-type').value = 'assembly';
+  document.getElementById('ws-color').value = '#3b82f6';
+  document.getElementById('ws-shim-req').checked = false;
+  document.getElementById('ws-shim-desc').value = '';
+  document.getElementById('ws-shim-qty').value = '0';
+  document.getElementById('ws-notes').value = '';
+  document.getElementById('shim-fields').style.display = 'none';
+  document.getElementById('addWSModal').dataset.hallId = hallId;
+  new bootstrap.Modal(document.getElementById('addWSModal')).show();
+}
+
+function editWS(ws) {
+  document.getElementById('ws-edit-id').value = ws.id;
+  document.getElementById('ws-modal-title').textContent = `Munkaállomás szerkesztése: ${ws.code}`;
+  document.getElementById('ws-code').value = ws.code;
+  document.getElementById('ws-name').value = ws.name || '';
+  document.getElementById('ws-line').value = ws.assembly_line || '';
+  document.getElementById('ws-type').value = ws.station_type || 'assembly';
+  document.getElementById('ws-color').value = ws.color || '#3b82f6';
+  document.getElementById('ws-shim-req').checked = ws.shim_required;
+  document.getElementById('ws-shim-desc').value = ws.shim_description || '';
+  document.getElementById('ws-shim-qty').value = ws.shim_quantity || 0;
+  document.getElementById('ws-notes').value = ws.notes || '';
+  toggleShim(ws.shim_required);
+  new bootstrap.Modal(document.getElementById('addWSModal')).show();
+}
+
+function toggleShim(on) {
+  document.getElementById('shim-fields').style.display = on ? '' : 'none';
+}
+
+async function saveWorkstation() {
+  const editId = document.getElementById('ws-edit-id').value;
+  const params = new URLSearchParams({
+    code: document.getElementById('ws-code').value.trim(),
+    name: document.getElementById('ws-name').value.trim(),
+    assembly_line: document.getElementById('ws-line').value,
+    station_type: document.getElementById('ws-type').value,
+    color: document.getElementById('ws-color').value,
+    shim_required: document.getElementById('ws-shim-req').checked,
+    shim_description: document.getElementById('ws-shim-desc').value.trim(),
+    shim_quantity: document.getElementById('ws-shim-qty').value,
+    notes: document.getElementById('ws-notes').value.trim(),
+  });
+
+  const hallId = document.getElementById('addWSModal').dataset.hallId;
+  if (hallId) params.set('hall_id', hallId);
+
+  let r;
+  if (editId) {
+    r = await fetch(`/api/factory/workstations/${editId}?${params}`, {method:'PUT'});
+  } else {
+    r = await fetch(`/api/factory/workstations?${params}`, {method:'POST'});
+  }
+  if (r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('addWSModal')).hide();
+    showToast(editId ? 'Munkaállomás frissítve' : 'Munkaállomás létrehozva', 'success');
+    loadOverview();
+    loadWorkstations();
+  } else { const e = await r.json(); showToast(e.detail||'Hiba!', 'danger'); }
+}
+
+async function deleteWS(id) {
+  if (!confirm('Biztosan törli a munkaállomást?')) return;
+  await fetch(`/api/factory/workstations/${id}`, {method:'DELETE'});
+  showToast('Törölve', 'warning');
+  loadOverview();
+  loadWorkstations();
+}
+
+async function createOperator() {
+  const params = new URLSearchParams({
+    name: document.getElementById('op-name').value.trim(),
+    employee_id: document.getElementById('op-empid').value.trim(),
+  });
+  const rfid = document.getElementById('op-rfid').value.trim();
+  const pin = document.getElementById('op-pin').value.trim();
+  const fk = document.getElementById('op-forklift').value.trim();
+  if (rfid) params.set('rfid_epc', rfid);
+  if (pin) params.set('pin_code', pin);
+  if (fk) params.set('forklift_number', fk);
+
+  const r = await fetch(`/api/forklift/operators?${params}`, {method:'POST'});
+  if (r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('addOperatorModal')).hide();
+    showToast('Kezelő felvéve', 'success');
+    loadOperators();
+  } else { const e = await r.json(); showToast(e.detail||'Hiba!', 'danger'); }
+}
+
+async function deleteOperator(id) {
+  if (!confirm('Biztosan törli a kezelőt?')) return;
+  await fetch(`/api/forklift/operators/${id}`, {method:'DELETE'});
+  showToast('Törölve', 'warning');
+  loadOperators();
+}
+
+// ── Tab váltáskor töltjük be az adatokat ─────────────────────────────────────
+document.querySelectorAll('#admin-tabs .nav-link').forEach(tab => {
+  tab.addEventListener('shown.bs.tab', e => {
+    const target = e.target.getAttribute('href');
+    if (target === '#tab-workstations') loadWorkstations();
+    if (target === '#tab-forklifts') { loadOperators(); loadSessionHistory(); }
+  });
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadOverview();
+</script>
+{% endblock %}

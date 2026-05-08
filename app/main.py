@@ -10,7 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
 from app import models  # noqa: F401 – registers all models
-from app.routers import articles, pallets, locations, rfid, tasks, receiving, phases, infor_ln, carts
+from app.routers import (
+    articles, pallets, locations, rfid, tasks,
+    receiving, phases, infor_ln, carts, factory_structure, forklift,
+)
 
 
 class ConnectionManager:
@@ -66,15 +69,17 @@ templates = Jinja2Templates(directory="templates")
 app.state.ws_manager = ws_manager
 
 # ── API routers ────────────────────────────────────────────────────────────────
-app.include_router(articles.router,  prefix="/api/articles",  tags=["Cikkek"])
-app.include_router(pallets.router,   prefix="/api/pallets",   tags=["Raklapok"])
-app.include_router(locations.router, prefix="/api/locations", tags=["Helyek"])
-app.include_router(rfid.router,      prefix="/api/rfid",      tags=["RFID"])
-app.include_router(tasks.router,     prefix="/api/tasks",     tags=["Feladatok"])
-app.include_router(receiving.router, prefix="/api/receiving", tags=["Bevételezés"])
-app.include_router(phases.router,    prefix="/api/phases",    tags=["Fázisok"])
-app.include_router(infor_ln.router,  prefix="/api/infor-ln",  tags=["Infor LN"])
-app.include_router(carts.router,     prefix="/api/carts",     tags=["Kocsik"])
+app.include_router(articles.router,           prefix="/api/articles",         tags=["Cikkek"])
+app.include_router(pallets.router,            prefix="/api/pallets",          tags=["Raklapok"])
+app.include_router(locations.router,          prefix="/api/locations",        tags=["Helyek"])
+app.include_router(rfid.router,               prefix="/api/rfid",             tags=["RFID"])
+app.include_router(tasks.router,              prefix="/api/tasks",            tags=["Feladatok"])
+app.include_router(receiving.router,          prefix="/api/receiving",        tags=["Bevételezés"])
+app.include_router(phases.router,             prefix="/api/phases",           tags=["Fázisok"])
+app.include_router(infor_ln.router,           prefix="/api/infor-ln",         tags=["Infor LN"])
+app.include_router(carts.router,              prefix="/api/carts",            tags=["Kocsik"])
+app.include_router(factory_structure.router,  prefix="/api/factory",          tags=["Üzem struktúra"])
+app.include_router(forklift.router,           prefix="/api/forklift",         tags=["Targoncás"])
 
 
 # ── WebSocket ──────────────────────────────────────────────────────────────────
@@ -132,6 +137,14 @@ async def page_infor_ln(request: Request):
 @app.get("/szerelde")
 async def page_szerelde(request: Request):
     return templates.TemplateResponse("szerelde.html", {"request": request, "page": "szerelde"})
+
+@app.get("/targonca")
+async def page_targonca(request: Request):
+    return templates.TemplateResponse("targonca.html", {"request": request, "page": "targonca"})
+
+@app.get("/factory-admin")
+async def page_factory_admin(request: Request):
+    return templates.TemplateResponse("factory_admin.html", {"request": request, "page": "factory_admin"})
 
 
 if __name__ == "__main__":

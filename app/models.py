@@ -236,6 +236,111 @@ class CartMovement(Base):
     cart = relationship("Cart")
 
 
+class Factory(Base):
+    """Üzem / gyár."""
+    __tablename__ = "factories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(20), unique=True, index=True, nullable=False)
+    name = Column(String(200), nullable=False)
+    address = Column(String(300))
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    halls = relationship("Hall", back_populates="factory")
+
+
+class Hall(Base):
+    """Csarnok / üzemrész."""
+    __tablename__ = "halls"
+
+    id = Column(Integer, primary_key=True, index=True)
+    factory_id = Column(Integer, ForeignKey("factories.id"))
+    code = Column(String(20), unique=True, index=True, nullable=False)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    color = Column(String(20), default="#3b82f6")
+    floor_plan_url = Column(String(500))
+    is_active = Column(Boolean, default=True)
+
+    factory = relationship("Factory", back_populates="halls")
+    workstations = relationship("WorkStation", back_populates="hall")
+
+
+class WorkStation(Base):
+    """Munkaállomás – testreszabható, adatbázisban tárolt pozíció."""
+    __tablename__ = "workstations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    hall_id = Column(Integer, ForeignKey("halls.id"), nullable=True)
+    code = Column(String(30), unique=True, index=True, nullable=False)   # pl. "1423"
+    name = Column(String(200))                                            # pl. "JD 1423 – Hajtómű szerelés"
+    assembly_line = Column(String(20))                                    # "4270" | "4392"
+    station_type = Column(String(30), default="assembly")                 # assembly | storage | transit | finished
+    # SVG pozíció a térképen
+    svg_x = Column(Integer)
+    svg_y = Column(Integer)
+    svg_w = Column(Integer, default=118)
+    svg_h = Column(Integer, default=140)
+    color = Column(String(20))
+    # Hézagoló lemez igény
+    shim_required = Column(Boolean, default=False)
+    shim_description = Column(Text)                                       # milyen hézagoló lemez kell
+    shim_quantity = Column(Integer, default=0)
+    notes = Column(Text)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    hall = relationship("Hall", back_populates="workstations")
+
+
+class ForkliftOperator(Base):
+    """Targoncás kezelő."""
+    __tablename__ = "forklift_operators"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    employee_id = Column(String(50), unique=True, index=True)
+    rfid_epc = Column(String(100), unique=True, index=True)   # belépő kártya EPC
+    pin_code = Column(String(10))                              # PIN alternatív bejelentkezés
+    forklift_number = Column(String(30))                      # melyik targoncához rendelt
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    sessions = relationship("ForkliftSession", back_populates="operator")
+
+
+class ForkliftSession(Base):
+    """Aktív targoncás szekció – bejelentkezési rekord."""
+    __tablename__ = "forklift_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    operator_id = Column(Integer, ForeignKey("forklift_operators.id"))
+    forklift_number = Column(String(30))
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    ended_at = Column(DateTime(timezone=True))
+    last_activity = Column(DateTime(timezone=True))
+    notes = Column(Text)
+
+    operator = relationship("ForkliftOperator", back_populates="sessions")
+
+
+class InforCSVImport(Base):
+    """Infor LN CSV import napló."""
+    __tablename__ = "infor_csv_imports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String(200))
+    import_type = Column(String(50))        # inventory | articles | orders
+    rows_total = Column(Integer, default=0)
+    rows_imported = Column(Integer, default=0)
+    rows_error = Column(Integer, default=0)
+    status = Column(String(20), default="pending")
+    error_log = Column(Text)
+    imported_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class InforLNSync(Base):
     __tablename__ = "infor_ln_sync"
 
