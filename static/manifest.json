@@ -1,0 +1,43 @@
+{
+  "name": "RFID Raktár",
+  "short_name": "RFID Raktár",
+  "description": "Komissiózó kocsi nyomonkövető és szerelde kezelő rendszer",
+  "start_url": "/szerelde",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "orientation": "landscape",
+  "lang": "hu",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Szerelde térkép",
+      "url": "/szerelde",
+      "description": "Élő kocsi pozíciók"
+    },
+    {
+      "name": "Üzem admin",
+      "url": "/factory-admin",
+      "description": "Napi terv és munkaállomások"
+    },
+    {
+      "name": "Dashboard",
+      "url": "/",
+      "description": "Áttekintő műszerfal"
+    }
+  ]
+}
