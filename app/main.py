@@ -116,10 +116,6 @@ async def page_locations(request: Request):
 async def page_tasks(request: Request):
     return templates.TemplateResponse("tasks.html", {"request": request, "page": "tasks"})
 
-@app.get("/receiving")
-async def page_receiving(request: Request):
-    return templates.TemplateResponse("receiving.html", {"request": request, "page": "receiving"})
-
 @app.get("/phases")
 async def page_phases(request: Request):
     return templates.TemplateResponse("phases.html", {"request": request, "page": "phases"})

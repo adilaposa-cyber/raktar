@@ -17,6 +17,8 @@
 <ul class="nav nav-tabs mb-3" id="admin-tabs">
   <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-overview">
     <i class="bi bi-diagram-3 me-1"></i>Áttekintés</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-daily">
+    <i class="bi bi-calendar-check me-1"></i>Napi terv</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-workstations">
     <i class="bi bi-grid me-1"></i>Munkaállomások</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-forklifts">
@@ -29,6 +31,33 @@
   <div class="tab-pane fade show active" id="tab-overview">
     <div class="row g-3" id="factory-tree">
       <div class="col-12 text-center text-muted py-5">
+        <div class="spinner-border spinner-border-sm me-2"></div>Betöltés...
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── NAPI TERV TAB ──────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="tab-daily">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <span class="fw-semibold me-2">Mai nap:</span>
+        <span class="text-muted" id="daily-date"></span>
+        <span class="badge bg-success ms-3" id="daily-set-count">–</span>
+        <span class="badge bg-secondary ms-1" id="daily-unset-count">–</span>
+      </div>
+      <div class="d-flex gap-2">
+        <select class="form-select form-select-sm w-auto" id="daily-line-filter" onchange="loadDailyPlan()">
+          <option value="">Minden sor</option>
+          <option value="4270">JD 4270</option>
+          <option value="4392">KSR 4392</option>
+        </select>
+        <button class="btn btn-sm btn-outline-danger" onclick="clearAllWork()">
+          <i class="bi bi-x-circle me-1"></i>Nap lezárása (összes törlése)
+        </button>
+      </div>
+    </div>
+    <div class="row g-3" id="daily-grid">
+      <div class="col-12 text-center text-muted py-4">
         <div class="spinner-border spinner-border-sm me-2"></div>Betöltés...
       </div>
     </div>
@@ -192,6 +221,41 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Napi munka beállítása modal -->
+<div class="modal fade" id="dailyWorkModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title"><i class="bi bi-wrench me-2 text-success"></i>Napi munka – <span id="dw-ws-label"></span></h5>
+      <button class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="dw-ws-id">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Cikkszám / alkatrész</label>
+        <input class="form-control" id="dw-article" placeholder="pl. JD-4270-324632">
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Leírás – mit szerelnek?</label>
+        <textarea class="form-control" id="dw-desc" rows="2"
+                  placeholder="pl. John Deere 4270 futómű összeszerlése"></textarea>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Kezelő / műszak</label>
+        <input class="form-control" id="dw-op" placeholder="pl. A-műszak / Kovács János">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-danger me-auto" onclick="saveDailyWork(true)">
+        <i class="bi bi-x me-1"></i>Munka törlése
+      </button>
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+      <button class="btn btn-success" onclick="saveDailyWork(false)">
+        <i class="bi bi-check me-1"></i>Mentés
+      </button>
+    </div>
+  </div></div>
 </div>
 
 <!-- Targoncás kezelő felvétele -->
@@ -524,10 +588,109 @@ async function seedReaders(hallId) {
   showToast(`RFID olvasók betöltve: ${d.created} új`, 'success');
 }
 
+// ── Napi terv ─────────────────────────────────────────────────────────────────
+let dailyWss = [];
+
+async function loadDailyPlan() {
+  const line = document.getElementById('daily-line-filter').value;
+  let url = '/api/factory/workstations';
+  if (line) url += `?assembly_line=${line}`;
+  const r = await fetch(url);
+  dailyWss = await r.json();
+
+  const today = new Date().toLocaleDateString('hu-HU', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  document.getElementById('daily-date').textContent = today;
+
+  const setCount = dailyWss.filter(ws => ws.current_work_article || ws.current_work_description).length;
+  document.getElementById('daily-set-count').textContent = `${setCount} beállítva`;
+  document.getElementById('daily-unset-count').textContent = `${dailyWss.length - setCount} üres`;
+
+  const grid = document.getElementById('daily-grid');
+  if (!dailyWss.length) {
+    grid.innerHTML = '<div class="col-12 text-center text-muted py-5">Nincs munkaállomás. <a href="#tab-overview" onclick="seedDefault()">Alapadatok betöltése →</a></div>';
+    return;
+  }
+
+  grid.innerHTML = dailyWss.map(ws => {
+    const hasWork = ws.current_work_article || ws.current_work_description;
+    const lineColor = ws.assembly_line === '4270' ? '#2563eb' : ws.assembly_line === '4392' ? '#d97706' : '#6b7280';
+    const startTime = ws.current_work_started_at
+      ? new Date(ws.current_work_started_at).toLocaleTimeString('hu-HU', {hour:'2-digit', minute:'2-digit'})
+      : null;
+    return `
+    <div class="col-sm-6 col-md-4 col-lg-3">
+      <div class="card border-0 shadow-sm h-100" style="border-left:4px solid ${hasWork?'#22c55e':'#e2e8f0'}!important;border-left-width:4px!important">
+        <div class="card-body py-2 px-3">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="fw-black fs-5 text-dark">${ws.code}</span>
+            ${ws.assembly_line ? `<span class="badge" style="background:${lineColor};font-size:.65rem">${ws.assembly_line}</span>` : ''}
+          </div>
+          ${ws.name ? `<div class="text-muted small mb-2" style="font-size:.75rem">${ws.name}</div>` : ''}
+          ${hasWork ? `
+            <div class="p-2 rounded mb-2" style="background:#f0fdf4">
+              ${ws.current_work_article ? `<div class="fw-bold text-success small">${ws.current_work_article}</div>` : ''}
+              ${ws.current_work_description ? `<div class="small text-dark">${ws.current_work_description}</div>` : ''}
+              ${ws.current_work_operator ? `<div class="text-muted mt-1" style="font-size:.72rem"><i class="bi bi-person me-1"></i>${ws.current_work_operator}</div>` : ''}
+              ${startTime ? `<div class="text-muted" style="font-size:.7rem"><i class="bi bi-clock me-1"></i>Óta: ${startTime}</div>` : ''}
+            </div>` : `
+            <div class="p-2 rounded mb-2" style="background:#f8fafc">
+              <div class="text-muted small text-center"><i class="bi bi-dash-circle me-1"></i>Nincs beállítva</div>
+            </div>`}
+          <button class="btn btn-sm w-100 ${hasWork?'btn-outline-success':'btn-primary'}"
+                  onclick="openDailyWork(${ws.id},'${ws.code}')">
+            <i class="bi bi-${hasWork?'pencil':'plus-circle'} me-1"></i>${hasWork?'Módosít':'Beállítás'}
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openDailyWork(wsId, code) {
+  const ws = dailyWss.find(w => w.id === wsId);
+  document.getElementById('dw-ws-id').value = wsId;
+  document.getElementById('dw-ws-label').textContent = code;
+  document.getElementById('dw-article').value = ws?.current_work_article || '';
+  document.getElementById('dw-desc').value = ws?.current_work_description || '';
+  document.getElementById('dw-op').value = ws?.current_work_operator || '';
+  new bootstrap.Modal(document.getElementById('dailyWorkModal')).show();
+}
+
+async function saveDailyWork(clear) {
+  const wsId = document.getElementById('dw-ws-id').value;
+  const params = new URLSearchParams({
+    clear,
+    description: document.getElementById('dw-desc').value,
+    article: document.getElementById('dw-article').value,
+    operator: document.getElementById('dw-op').value,
+  });
+  const r = await fetch(`/api/factory/workstations/${wsId}/current-work?${params}`, {method:'POST'});
+  if (r.ok) {
+    bootstrap.Modal.getInstance(document.getElementById('dailyWorkModal')).hide();
+    showToast(clear ? 'Munka törölve' : 'Munka beállítva', clear ? 'warning' : 'success');
+    loadDailyPlan();
+  } else { showToast('Hiba!','danger'); }
+}
+
+async function clearAllWork() {
+  const n = dailyWss.filter(ws => ws.current_work_article || ws.current_work_description).length;
+  if (!n) { showToast('Nincs beállított munka','info'); return; }
+  if (!confirm(`Biztosan törlöd az összes napi munka bejegyzést (${n} db)? Ez a nap lezárását jelenti.`)) return;
+  let done = 0;
+  for (const ws of dailyWss) {
+    if (!ws.current_work_article && !ws.current_work_description) continue;
+    await fetch(`/api/factory/workstations/${ws.id}/current-work?clear=true`, {method:'POST'});
+    done++;
+  }
+  showToast(`${done} állomás lezárva`, 'warning');
+  loadDailyPlan();
+}
+
 // ── Tab váltáskor töltjük be az adatokat ─────────────────────────────────────
 document.querySelectorAll('#admin-tabs .nav-link').forEach(tab => {
   tab.addEventListener('shown.bs.tab', e => {
     const target = e.target.getAttribute('href');
+    if (target === '#tab-daily') loadDailyPlan();
     if (target === '#tab-workstations') loadWorkstations();
     if (target === '#tab-forklifts') { loadOperators(); loadSessionHistory(); }
   });
