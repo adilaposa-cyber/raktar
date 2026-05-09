@@ -7,13 +7,18 @@ import asyncio
 
 from app.database import get_db
 from app import models
-from app.factory_config import HK_TO_POSITION, HK_BY_ID, ALL_POSITIONS, HK_READERS
+from app.factory_config import HK_TO_POSITION, HK_BY_ID, ALL_POSITIONS, HK_READERS, CORRIDOR_POSITIONS
 
 router = APIRouter()
 
 
 # ── Séma helpers (inline – elkerüli a körkörös importot) ─────────────────────
 def _cart_dict(c: models.Cart) -> dict:
+    pos_changed = c.position_changed_at
+    corridor_minutes = None
+    if pos_changed and c.current_position in CORRIDOR_POSITIONS:
+        delta = (datetime.now() - pos_changed.replace(tzinfo=None))
+        corridor_minutes = round(delta.total_seconds() / 60, 1)
     return {
         "id": c.id,
         "cart_number": c.cart_number,
@@ -22,6 +27,9 @@ def _cart_dict(c: models.Cart) -> dict:
         "status": c.status,
         "last_hk_reader": c.last_hk_reader,
         "last_seen_at": c.last_seen_at.isoformat() if c.last_seen_at else None,
+        "position_changed_at": pos_changed.isoformat() if pos_changed else None,
+        "corridor_minutes": corridor_minutes,
+        "kitarolt": corridor_minutes is not None and corridor_minutes >= 5,
         "assigned_operator": c.assigned_operator,
         "notes": c.notes,
         "rfid_epc": c.rfid_tag.epc if c.rfid_tag else None,
@@ -107,12 +115,25 @@ def floor_plan_data(db: Session = Depends(get_db)):
             "last_seen": reader_db.last_seen.isoformat() if (reader_db and reader_db.last_seen) else None,
         })
 
+    corridor_carts = sum(
+        len(position_map.get(p, [])) for p in CORRIDOR_POSITIONS
+    )
+    kitarolt_count = sum(
+        1 for p in CORRIDOR_POSITIONS
+        for c in position_map.get(p, [])
+        if c.get("kitarolt")
+    )
     return {
         "position_map": position_map,
         "readers": readers_status,
         "stats": {
             "hátralékos": len(position_map.get("HÁTRALÉKOS", [])),
-            "aktív": sum(len(v) for k, v in position_map.items() if k not in ["HÁTRALÉKOS", "KÉSZ", "FOLYOSÓ"]),
+            "aktív": sum(
+                len(v) for k, v in position_map.items()
+                if k not in {"HÁTRALÉKOS", "KÉSZ"} | CORRIDOR_POSITIONS
+            ),
+            "folyosó": corridor_carts,
+            "kitarolt": kitarolt_count,
             "kész": len(position_map.get("KÉSZ", [])),
             "total": len(carts),
         },
@@ -164,9 +185,12 @@ async def manual_move(
         raise HTTPException(404, "Kocsi nem található")
 
     old_pos = cart.current_position
+    now = datetime.now()
     cart.current_position = to_position
-    cart.last_seen_at = datetime.now()
-    cart.updated_at = datetime.now()
+    cart.last_seen_at = now
+    cart.updated_at = now
+    if old_pos != to_position:
+        cart.position_changed_at = now
 
     if to_position == "HÁTRALÉKOS":
         cart.status = "hátralékos"
@@ -263,6 +287,8 @@ async def process_rfid_event(
     cart.last_hk_reader = reader_id
     cart.last_seen_at = now
     cart.updated_at = now
+    if old_position != new_position:
+        cart.position_changed_at = now
 
     if new_position == "HÁTRALÉKOS":
         cart.status = "hátralékos"

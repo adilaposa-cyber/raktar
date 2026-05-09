@@ -24,6 +24,8 @@ def run_migrations():
         ("rfid_readers", "hall_id",  "INTEGER"),
         ("rfid_readers", "svg_x",    "INTEGER DEFAULT 100"),
         ("rfid_readers", "svg_y",    "INTEGER DEFAULT 100"),
+        # Cart – pozíció változás időbélyeg (folyosó 5 perces timer)
+        ("carts", "position_changed_at", "DATETIME"),
     ]
 
     with engine.connect() as conn:

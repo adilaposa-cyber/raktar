@@ -20,6 +20,9 @@
   <button class="btn btn-sm btn-outline-danger" onclick="addReader()" title="RFID olvasó hozzáadása">
     <i class="bi bi-wifi me-1"></i>RFID olvasó
   </button>
+  <button class="btn btn-sm btn-outline-success" onclick="quickCreate()" title="Több állomás gyors létrehozása listából">
+    <i class="bi bi-lightning me-1"></i>Gyors létrehozás
+  </button>
   <button class="btn btn-sm btn-outline-dark" onclick="changeCanvas()" title="Vászon mérete">
     <i class="bi bi-aspect-ratio me-1"></i>Vászon
   </button>
@@ -328,6 +331,65 @@
         <button class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
         <button class="btn btn-danger" onclick="confirmAddReader()">
           <i class="bi bi-wifi me-1"></i>Hozzáadás
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gyors létrehozás modal -->
+<div class="modal fade" id="quickCreateModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-lightning me-2 text-success"></i>Gyors állomáslista létrehozás</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Adja meg az állomáskódokat vesszővel elválasztva. A rendszer automatikusan elrendezi őket balról jobbra, sorokba tördelve.</p>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Állomás kódok <span class="text-danger">*</span></label>
+          <textarea class="form-control font-monospace" id="qc-codes" rows="3"
+                    placeholder="pl. 1423, 1424, 1425, 1426, 1427, 1428, 1429"></textarea>
+          <div class="form-text">Vesszővel vagy új sorral elválasztva. Példa: JD sor esetén: 1423, 1424, 1425, 1426, 1427, 1428, 1429</div>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Szín</label>
+            <input type="color" class="form-control form-control-color w-100" id="qc-color" value="#3b82f6">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Állomás szélesség (px)</label>
+            <input type="number" class="form-control" id="qc-w" value="120" min="60" max="300">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Állomás magasság (px)</label>
+            <input type="number" class="form-control" id="qc-h" value="140" min="60" max="300">
+          </div>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Kezdő X pozíció</label>
+            <input type="number" class="form-control" id="qc-start-x" value="40" min="0">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Kezdő Y pozíció</label>
+            <input type="number" class="form-control" id="qc-start-y" value="100" min="0">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Hézag (px)</label>
+            <input type="number" class="form-control" id="qc-gap" value="8" min="0" max="40">
+          </div>
+        </div>
+        <div id="qc-preview" class="alert alert-info small d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Mégsem</button>
+        <button class="btn btn-outline-primary" onclick="previewQuickCreate()">
+          <i class="bi bi-eye me-1"></i>Előnézet
+        </button>
+        <button class="btn btn-success fw-semibold" onclick="runQuickCreate()">
+          <i class="bi bi-lightning me-1"></i>Létrehozás
         </button>
       </div>
     </div>
@@ -852,6 +914,81 @@ document.addEventListener('keydown', e => {
   if (e.key === 's' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveLayout(); }
   if (e.key === 'e') setMode(editMode ? 'view' : 'edit');
 });
+
+// ── Gyors létrehozás ─────────────────────────────────────────────────────────
+function quickCreate() {
+  if (!editMode) { showToast('Előbb kapcsolja be a szerkesztési módot!', 'warning'); return; }
+  new bootstrap.Modal(document.getElementById('quickCreateModal')).show();
+}
+
+function parseQCCodes() {
+  const raw = document.getElementById('qc-codes').value;
+  return raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+}
+
+function previewQuickCreate() {
+  const codes = parseQCCodes();
+  const preview = document.getElementById('qc-preview');
+  if (!codes.length) {
+    preview.className = 'alert alert-warning small';
+    preview.textContent = 'Nincs érvényes kód megadva.';
+    preview.classList.remove('d-none');
+    return;
+  }
+  const w = +document.getElementById('qc-w').value || 120;
+  const h = +document.getElementById('qc-h').value || 140;
+  const gap = +document.getElementById('qc-gap').value || 8;
+  const sx = +document.getElementById('qc-start-x').value || 40;
+  const sy = +document.getElementById('qc-start-y').value || 100;
+  const totalW = codes.length * (w + gap) - gap;
+  preview.className = 'alert alert-info small';
+  preview.innerHTML = `<strong>${codes.length} állomás</strong> jön létre: ${codes.join(', ')}<br>
+    Sor szélessége: ${totalW}px, kezdő pozíció: (${sx}, ${sy})`;
+  preview.classList.remove('d-none');
+}
+
+async function runQuickCreate() {
+  const codes = parseQCCodes();
+  if (!codes.length) { showToast('Adj meg legalább egy kódot!', 'danger'); return; }
+
+  const color = document.getElementById('qc-color').value;
+  const w = +document.getElementById('qc-w').value || 120;
+  const h = +document.getElementById('qc-h').value || 140;
+  const gap = +document.getElementById('qc-gap').value || 8;
+  let x = +document.getElementById('qc-start-x').value || 40;
+  const y = +document.getElementById('qc-start-y').value || 100;
+
+  bootstrap.Modal.getInstance(document.getElementById('quickCreateModal')).hide();
+
+  let created = 0, errors = 0;
+  for (const code of codes) {
+    const existing = mapData.workstations.find(ws => ws.code === code);
+    if (existing) {
+      showToast(`${code} már létezik, kihagyva`, 'warning');
+      x += w + gap;
+      continue;
+    }
+    const params = new URLSearchParams({
+      code, name: code, station_type: 'assembly', color,
+      svg_x: x, svg_y: y, svg_w: w, svg_h: h, hall_id: HALL_ID,
+    });
+    const r = await fetch(`/api/factory/workstations?${params}`, { method: 'POST' });
+    if (r.ok) {
+      const ws = await r.json();
+      mapData.workstations.push(ws);
+      renderWS(ws);
+      created++;
+    } else {
+      errors++;
+    }
+    x += w + gap;
+  }
+
+  document.getElementById('empty-hint').style.display = 'none';
+  updateMapStats();
+  if (created > 0) showToast(`${created} állomás létrehozva${errors > 0 ? ', '+errors+' hiba' : ''}`, 'success');
+  else if (errors > 0) showToast(`${errors} hiba a létrehozásnál`, 'danger');
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 load();

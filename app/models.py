@@ -217,6 +217,7 @@ class Cart(Base):
     status = Column(String(20), default="hátralékos")  # hátralékos | aktív | kész | hiányzik
     last_hk_reader = Column(String(10))         # HK01..HK10
     last_seen_at = Column(DateTime(timezone=True))
+    position_changed_at = Column(DateTime(timezone=True))
     assigned_operator = Column(String(100))
     notes = Column(Text)
     is_active = Column(Boolean, default=True)
