@@ -6,9 +6,6 @@
 <button class="btn btn-sm btn-outline-info me-1" onclick="toggleWorkOverlay()" id="work-toggle-btn">
   <i class="bi bi-wrench me-1"></i>Napi munka
 </button>
-<button class="btn btn-sm btn-outline-warning me-1" onclick="toggleShimOverlay()" id="shim-toggle-btn">
-  <i class="bi bi-layers me-1"></i>Hézagoló
-</button>
 <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addCartModal">
   <i class="bi bi-plus-lg me-1"></i>Kocsi felvétele
 </button>
@@ -276,7 +273,6 @@
 
             <!-- ═══ Dinamikus rétegek ─ JS tölti be ══════════════════════════ -->
             <g id="carts-layer"></g>
-            <g id="shim-layer" style="display:none"></g>
             <g id="work-layer" style="display:none"></g>
 
           </svg>
@@ -287,23 +283,40 @@
 
   <!-- Side panel -->
   <div class="col-xl-3">
-    <!-- Kitárolt figyelmeztetés -->
+    <!-- Kitárolt / mozgatást vár -->
     <div class="card border-danger shadow-sm mb-3 d-none" id="kitarolt-alert-card" style="border-width:2px!important">
       <div class="card-header bg-danger text-white py-2 d-flex align-items-center gap-2">
         <i class="bi bi-alarm-fill fs-6"></i>
         <h6 class="mb-0 small fw-bold">Kitárolt – mozgatást vár!</h6>
       </div>
-      <div class="card-body p-0" id="kitarolt-list" style="max-height:150px;overflow-y:auto"></div>
+      <div class="card-body p-0" id="kitarolt-list" style="max-height:140px;overflow-y:auto"></div>
     </div>
 
-    <!-- RFID Érzékelők -->
+    <!-- Mozgás szükséges (leghosszabb ideje áll) -->
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-transparent border-0 py-2 d-flex justify-content-between align-items-center">
-        <h6 class="mb-0 small fw-semibold"><i class="bi bi-wifi me-1 text-danger"></i>RFID Érzékelők</h6>
-        <span class="badge bg-secondary" id="readers-online-badge">–/10</span>
+        <h6 class="mb-0 small fw-semibold"><i class="bi bi-hourglass-split me-1 text-warning"></i>Mozgás szükséges</h6>
+        <span class="badge bg-warning text-dark" id="needs-move-badge">0</span>
       </div>
       <div class="card-body p-0">
-        <div id="hk-status-list" style="max-height:190px;overflow-y:auto"></div>
+        <div id="needs-move-list" style="max-height:200px;overflow-y:auto">
+          <p class="text-muted text-center py-3 small mb-0">Nincs adat</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mozgási napló -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent border-0 py-2 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 small fw-semibold"><i class="bi bi-arrow-left-right me-1 text-primary"></i>Mozgási napló</h6>
+        <button class="btn btn-link btn-sm p-0 text-muted" onclick="loadMovements()" title="Frissítés">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <div id="movement-log" style="max-height:200px;overflow-y:auto">
+          <p class="text-muted text-center py-3 small mb-0">Betöltés...</p>
+        </div>
       </div>
     </div>
 
@@ -318,7 +331,7 @@
           <option value="kész">Kész</option>
         </select>
       </div>
-      <div class="card-body p-0" id="cart-list" style="max-height:380px;overflow-y:auto"></div>
+      <div class="card-body p-0" id="cart-list" style="max-height:280px;overflow-y:auto"></div>
     </div>
   </div>
 </div>
@@ -431,7 +444,6 @@ let floorData = {};
 let workstations = [];
 let selectedCartId = null;
 let workOverlayVisible = false;
-let shimVisible = false;
 let activeWorkWSId = null;
 
 // ── SVG pozíció közepek ───────────────────────────────────────────────────
@@ -460,10 +472,10 @@ async function loadFloorPlan() {
   const r = await fetch('/api/carts/floor-plan');
   floorData = await r.json();
   renderCarts(floorData);
-  renderHKStatus(floorData.readers);
   renderCartList(floorData);
   updateKPIs(floorData.stats);
   renderKitaroltAlerts(floorData);
+  renderNeedsMoveList(floorData);
   updateCorridorCounts(floorData.position_map);
 }
 
@@ -472,8 +484,12 @@ async function loadWorkstations() {
   if (r.ok) {
     workstations = await r.json();
     if (workOverlayVisible) renderWorkOverlay();
-    if (shimVisible) renderShimOverlay();
   }
+}
+
+async function loadMovements() {
+  const r = await fetch('/api/carts/movements?limit=40');
+  if (r.ok) renderMovements(await r.json());
 }
 
 // ── KPI frissítés ─────────────────────────────────────────────────────────
@@ -506,7 +522,7 @@ function renderKitaroltAlerts(data) {
         <i class="bi bi-alarm text-danger"></i>
         <div>
           <div class="fw-semibold">${c.cart_number}</div>
-          <div class="text-muted">${c.current_position} – ${c.corridor_minutes} perce</div>
+          <div class="text-muted">${c.current_position} – ${formatMinutes(c.position_minutes)}</div>
         </div>
         <button class="btn btn-outline-warning ms-auto" style="font-size:.7rem;padding:2px 7px"
                 onclick="openMoveModal(${c.id},'${c.cart_number}','${c.current_position}')">Mozgat</button>
@@ -514,6 +530,60 @@ function renderKitaroltAlerts(data) {
   } else {
     card.classList.add('d-none');
   }
+}
+
+// ── Mozgás szükséges lista (leghosszabb ideje egy helyen) ──────────────────
+function renderNeedsMoveList(data) {
+  const all = Object.values(data.position_map||{}).flat();
+  const sorted = all
+    .filter(c => c.position_minutes != null)
+    .sort((a, b) => b.position_minutes - a.position_minutes)
+    .slice(0, 15);
+  document.getElementById('needs-move-badge').textContent = sorted.length;
+  document.getElementById('needs-move-list').innerHTML = sorted.length ? sorted.map(c => {
+    const col = ageColor(c.position_minutes);
+    const timeStr = formatMinutes(c.position_minutes);
+    return `
+      <div class="d-flex align-items-center gap-2 px-3 py-1 border-bottom" style="font-size:.78rem">
+        <span style="width:9px;height:9px;border-radius:50%;background:${col};flex-shrink:0"></span>
+        <span class="fw-semibold">${c.cart_number}</span>
+        <span class="text-muted small text-truncate flex-grow-1">${c.current_position}</span>
+        <span class="fw-bold" style="color:${col};min-width:34px;text-align:right">${timeStr}</span>
+        <button class="btn btn-outline-secondary" style="padding:1px 5px;font-size:.68rem"
+                onclick="event.stopPropagation();openMoveModal(${c.id},'${c.cart_number}','${c.current_position}')">
+          <i class="bi bi-arrows-move"></i></button>
+      </div>`;
+  }).join('') : '<p class="text-muted text-center py-3 small mb-0">Nincs aktív kocsi</p>';
+}
+
+// ── Mozgási napló ─────────────────────────────────────────────────────────
+function renderMovements(movements) {
+  document.getElementById('movement-log').innerHTML = movements.length ? movements.map(m => {
+    const t = m.moved_at ? new Date(m.moved_at).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}) : '–';
+    const src = m.hk_reader ? `R${m.hk_reader.replace('HK','')}` : (m.operator||'kézi');
+    return `
+      <div class="d-flex align-items-center gap-1 px-3 py-1 border-bottom" style="font-size:.76rem">
+        <span class="text-muted" style="min-width:30px">${t}</span>
+        <span class="fw-semibold text-truncate">${m.cart_number}</span>
+        <span class="text-muted small text-truncate" style="max-width:110px">${m.from||'?'} → ${m.to||'?'}</span>
+        <span class="text-muted ms-auto" style="font-size:.68rem;flex-shrink:0">${src}</span>
+      </div>`;
+  }).join('') : '<p class="text-muted text-center py-3 small mb-0">Nincs mozgás</p>';
+}
+
+// ── Időformázás ───────────────────────────────────────────────────────────
+function formatMinutes(mins) {
+  if (mins == null) return '–';
+  if (mins < 60) return Math.round(mins) + 'p';
+  return (mins / 60).toFixed(1).replace('.0','') + 'ó';
+}
+
+function ageColor(mins) {
+  if (mins == null) return '#6b7280';
+  if (mins < 30) return '#22c55e';
+  if (mins < 90) return '#f59e0b';
+  if (mins < 180) return '#f97316';
+  return '#ef4444';
 }
 
 // ── Kocsi ikonok rajzolása ─────────────────────────────────────────────────
@@ -524,20 +594,22 @@ function renderCarts(data) {
     const center = POS_CENTERS[pos];
     if (!center) continue;
     carts.forEach((cart, idx) => {
-      const col = cart.kitarolt ? '#ef4444' : (STATUS_COLOR[cart.status]||'#6b7280');
+      const col = cart.kitarolt ? '#ef4444' : ageColor(cart.position_minutes);
       const ox = (idx%3 - 1) * 24;
-      const oy = Math.floor(idx/3) * 22;
+      const oy = Math.floor(idx/3) * 24;
       const cx = center.x + ox, cy = center.y - 14 + oy;
       const g = document.createElementNS('http://www.w3.org/2000/svg','g');
       g.setAttribute('class','cart-icon');
       g.style.cursor = 'pointer';
       const lbl = cart.cart_number.replace('KOCSI-','').substring(0,6);
+      const timeStr = cart.position_minutes != null ? formatMinutes(cart.position_minutes) : '';
       g.innerHTML = `
-        <rect x="${cx-12}" y="${cy-10}" width="24" height="19" fill="${col}" rx="3" opacity="0.92"
+        <rect x="${cx-14}" y="${cy-11}" width="28" height="${timeStr?'22':'19'}" fill="${col}" rx="3" opacity="0.92"
               stroke="${selectedCartId===cart.id?'#111':'white'}" stroke-width="${selectedCartId===cart.id?2.5:1}"/>
-        <text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="8" fill="white" font-weight="700">${lbl}</text>
-        ${cart.kitarolt?`<circle cx="${cx+9}" cy="${cy-12}" r="5" fill="#ef4444" stroke="white" stroke-width="1"/>
-          <text x="${cx+9}" y="${cy-8}" text-anchor="middle" font-size="6" fill="white" font-weight="900">!</text>`:''}`;
+        <text x="${cx}" y="${cy+2}" text-anchor="middle" font-size="7.5" fill="white" font-weight="700">${lbl}</text>
+        ${timeStr ? `<text x="${cx}" y="${cy+13}" text-anchor="middle" font-size="6.5" fill="rgba(255,255,255,0.88)">${timeStr}</text>` : ''}
+        ${cart.kitarolt?`<circle cx="${cx+11}" cy="${cy-13}" r="5" fill="#ef4444" stroke="white" stroke-width="1"/>
+          <text x="${cx+11}" y="${cy-9}" text-anchor="middle" font-size="6" fill="white" font-weight="900">!</text>`:''}`;
       g.addEventListener('click', () => showCartDetail(cart));
       document.getElementById('carts-layer').appendChild(g);
     });
@@ -552,36 +624,28 @@ function highlightPos(pos, count) {
   else el.setAttribute('fill', count ? '#fef9c3' : 'white');
 }
 
-// ── RFID érzékelők státusz ────────────────────────────────────────────────
-function renderHKStatus(readers) {
-  const online = readers.filter(r => r.status === 'online').length;
-  document.getElementById('readers-online-badge').textContent = `${online}/10`;
-  document.getElementById('readers-online-badge').className = `badge ${online > 0 ? 'bg-success' : 'bg-secondary'}`;
-  document.getElementById('hk-status-list').innerHTML = readers.map(r => `
-    <div class="d-flex align-items-center gap-2 px-3 py-1 border-bottom" style="font-size:.77rem">
-      <span style="width:9px;height:9px;border-radius:50%;background:${r.status==='online'?'#22c55e':'#94a3b8'};flex-shrink:0"></span>
-      <span class="fw-semibold text-danger" style="min-width:26px">R${r.id.replace('HK','')}</span>
-      <span class="text-muted flex-grow-1 text-truncate">${r.name.replace(/RFID érzékelő \d+ – /,'')}</span>
-      <span class="text-muted" style="font-size:.68rem">${r.last_seen ? new Date(r.last_seen).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}) : '–'}</span>
-    </div>`).join('');
-}
 
 // ── Kocsi lista ───────────────────────────────────────────────────────────
 function renderCartList(data) {
   const filter = document.getElementById('cart-filter').value;
   const all = Object.values(data.position_map||{}).flat();
   const filtered = filter ? all.filter(c => c.status === filter) : all;
-  document.getElementById('cart-list').innerHTML = filtered.length ? filtered.map(c => `
-    <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom" style="cursor:pointer;font-size:.8rem"
+  const sortedFiltered = [...filtered].sort((a,b) => (b.position_minutes||0) - (a.position_minutes||0));
+  document.getElementById('cart-list').innerHTML = sortedFiltered.length ? sortedFiltered.map(c => {
+    const col = c.kitarolt ? '#ef4444' : ageColor(c.position_minutes);
+    return `
+    <div class="d-flex align-items-center gap-2 px-3 py-1 border-bottom" style="cursor:pointer;font-size:.78rem"
          onclick="showCartDetail(${JSON.stringify(c).replace(/"/g,'&quot;')})">
-      <span style="width:10px;height:10px;border-radius:50%;background:${c.kitarolt?'#ef4444':STATUS_COLOR[c.status]||'#6b7280'};flex-shrink:0"></span>
+      <span style="width:9px;height:9px;border-radius:50%;background:${col};flex-shrink:0"></span>
       <span class="fw-semibold">${c.cart_number}</span>
       ${c.kitarolt?'<span class="badge bg-danger" style="font-size:.6rem">!</span>':''}
-      <span class="text-muted ms-auto small">${c.current_position||'–'}</span>
-      <button class="btn btn-outline-secondary" style="padding:1px 5px;font-size:.7rem"
+      <span class="text-muted ms-auto small text-truncate" style="max-width:70px">${c.current_position||'–'}</span>
+      ${c.position_minutes!=null?`<span class="fw-bold" style="color:${col};min-width:28px;text-align:right;font-size:.72rem">${formatMinutes(c.position_minutes)}</span>`:''}
+      <button class="btn btn-outline-secondary" style="padding:1px 4px;font-size:.68rem"
               onclick="event.stopPropagation();openMoveModal(${c.id},'${c.cart_number}','${c.current_position}')">
         <i class="bi bi-arrows-move"></i></button>
-    </div>`).join('') : '<p class="text-muted text-center py-3 small mb-0">Nincs kocsi</p>';
+    </div>`;
+  }).join('') : '<p class="text-muted text-center py-3 small mb-0">Nincs kocsi</p>';
 }
 
 // ── Kocsi részlet ─────────────────────────────────────────────────────────
@@ -598,7 +662,7 @@ function showCartDetail(cart) {
           <dt class="col-6">Pozíció</dt><dd class="col-6"><strong>${cart.current_position||'–'}</strong></dd>
           <dt class="col-6">RFID EPC</dt><dd class="col-6">${cart.rfid_epc ? `<code style="font-size:.75rem">${cart.rfid_epc}</code>` : '–'}</dd>
           <dt class="col-6">Utolsó érzékelő</dt><dd class="col-6">${cart.last_hk_reader ? 'R'+cart.last_hk_reader.replace('HK','') : '–'}</dd>
-          <dt class="col-6">Folyosón</dt><dd class="col-6">${cart.corridor_minutes != null ? cart.corridor_minutes+' perc' : '–'}</dd>
+          <dt class="col-6">Pozíción</dt><dd class="col-6" style="color:${ageColor(cart.position_minutes)}">${cart.position_minutes != null ? formatMinutes(cart.position_minutes) : '–'}</dd>
         </dl>
       </div>
       <div class="col-sm-7 d-flex flex-wrap gap-2 align-items-start">
@@ -774,45 +838,22 @@ function renderWorkOverlay() {
   });
 }
 
-// ── Hézagoló lemez overlay ────────────────────────────────────────────────
-function toggleShimOverlay() {
-  shimVisible = !shimVisible;
-  const btn = document.getElementById('shim-toggle-btn');
-  btn.classList.toggle('btn-warning', shimVisible);
-  btn.classList.toggle('btn-outline-warning', !shimVisible);
-  if (shimVisible) renderShimOverlay(); else clearShimOverlay();
-}
-function clearShimOverlay() {
-  document.getElementById('shim-layer').innerHTML = '';
-  document.getElementById('shim-layer').style.display = 'none';
-}
-function renderShimOverlay() {
-  const layer = document.getElementById('shim-layer');
-  layer.innerHTML = '';
-  layer.style.display = '';
-  workstations.filter(ws => ws.shim_required).forEach(ws => {
-    const c = POS_CENTERS[ws.code];
-    if (!c) return;
-    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
-    g.innerHTML = `
-      <rect x="${c.x+10}" y="${c.y-40}" width="38" height="16" fill="#f59e0b" rx="3" opacity="0.95"/>
-      <text x="${c.x+29}" y="${c.y-29}" text-anchor="middle" font-size="8" fill="white" font-weight="700">⬡${ws.shim_quantity}</text>`;
-    layer.appendChild(g);
-  });
-}
 
 // ── WebSocket ─────────────────────────────────────────────────────────────
 window.onRFIDEvent = function(evt) {
   if (evt.type === 'cart_move') {
     showToast(`${evt.cart_number}: ${evt.from||'?'} → ${evt.to}${evt.hk_reader?' (R'+evt.hk_reader.replace('HK','')+')'  :''}`, 'info');
     loadFloorPlan();
+    loadMovements();
   }
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────
 loadFloorPlan();
 loadWorkstations();
+loadMovements();
 setInterval(loadFloorPlan, 15000);
+setInterval(loadMovements, 30000);
 </script>
 
 <style>

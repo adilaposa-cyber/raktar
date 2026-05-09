@@ -151,28 +151,6 @@
           </button>
         </div>
 
-        <!-- Hézagoló lemez -->
-        <div class="px-3 py-2 border-bottom">
-          <div class="small fw-semibold text-muted mb-2 text-uppercase">Hézagoló lemez</div>
-          <div class="form-check form-switch mb-2">
-            <input class="form-check-input" type="checkbox" id="wp-shim-req" onchange="document.getElementById('wp-shim-fields').style.display=this.checked?'':'none'">
-            <label class="form-check-label small">Szükséges ennél az állomásnál</label>
-          </div>
-          <div id="wp-shim-fields">
-            <div class="mb-2">
-              <label class="form-label form-label-sm mb-1">Leírás</label>
-              <input class="form-control form-control-sm" id="wp-shim-desc" placeholder="pl. 0.3mm acél, 80x40mm">
-            </div>
-            <div class="mb-2">
-              <label class="form-label form-label-sm mb-1">Mennyiség (db)</label>
-              <input type="number" class="form-control form-control-sm" id="wp-shim-qty" min="0">
-            </div>
-          </div>
-          <button class="btn btn-sm btn-outline-warning w-100" onclick="saveWSProps()">
-            <i class="bi bi-layers me-1"></i>Hézagoló mentése
-          </button>
-        </div>
-
         <!-- Aktuális munka -->
         <div class="px-3 py-2 border-bottom">
           <div class="small fw-semibold text-muted mb-2 text-uppercase">
@@ -471,9 +449,6 @@ function renderWS(ws) {
     <text class="ws-name-txt" x="${x + w/2}" y="${y+42}" text-anchor="middle"
           font-size="9" fill="#475569" font-weight="600"
           style="max-width:${w-10}px">${esc(shortText(ws.name||'', w/7))}</text>
-    ${ws.shim_required ? `
-    <rect x="${x+w-30}" y="${y+28}" width="26" height="14" fill="#f59e0b" rx="3" opacity="0.9"/>
-    <text x="${x+w-17}" y="${y+38}" text-anchor="middle" font-size="8" fill="white" font-weight="700">⬡${ws.shim_quantity||0}</text>` : ''}
     ${isActive ? `
     <rect x="${x+4}" y="${y+h-40}" width="${w-8}" height="36" fill="white" rx="4" opacity="0.92"/>
     <text x="${x + w/2}" y="${y+h-28}" text-anchor="middle" font-size="8" fill="#0f172a" font-weight="700">${esc(shortText(ws.current_work_article||'', 14))}</text>
@@ -686,10 +661,6 @@ function selectElement(type, id) {
     document.getElementById('wp-color').value = ws.color || '#3b82f6';
     document.getElementById('wp-w').value = ws.svg_w || 120;
     document.getElementById('wp-h').value = ws.svg_h || 140;
-    document.getElementById('wp-shim-req').checked = ws.shim_required;
-    document.getElementById('wp-shim-fields').style.display = ws.shim_required ? '' : 'none';
-    document.getElementById('wp-shim-desc').value = ws.shim_description || '';
-    document.getElementById('wp-shim-qty').value = ws.shim_quantity || 0;
     document.getElementById('wp-work-article').value = ws.current_work_article || '';
     document.getElementById('wp-work-desc').value = ws.current_work_description || '';
     document.getElementById('wp-work-op').value = ws.current_work_operator || '';
@@ -740,9 +711,6 @@ async function saveWSProps() {
     color: document.getElementById('wp-color').value,
     svg_w: document.getElementById('wp-w').value,
     svg_h: document.getElementById('wp-h').value,
-    shim_required: document.getElementById('wp-shim-req').checked,
-    shim_description: document.getElementById('wp-shim-desc').value,
-    shim_quantity: document.getElementById('wp-shim-qty').value,
   });
   const r = await fetch(`/api/factory/workstations/${selected.id}?${params}`, { method: 'PUT' });
   if (r.ok) {

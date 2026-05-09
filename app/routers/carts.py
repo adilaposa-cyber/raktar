@@ -15,10 +15,12 @@ router = APIRouter()
 # ── Séma helpers (inline – elkerüli a körkörös importot) ─────────────────────
 def _cart_dict(c: models.Cart) -> dict:
     pos_changed = c.position_changed_at
-    corridor_minutes = None
-    if pos_changed and c.current_position in CORRIDOR_POSITIONS:
-        delta = (datetime.now() - pos_changed.replace(tzinfo=None))
-        corridor_minutes = round(delta.total_seconds() / 60, 1)
+    position_minutes = None
+    if pos_changed:
+        delta = datetime.now() - pos_changed.replace(tzinfo=None)
+        position_minutes = round(delta.total_seconds() / 60, 1)
+    in_corridor = c.current_position in CORRIDOR_POSITIONS
+    kitarolt = in_corridor and position_minutes is not None and position_minutes >= 5
     return {
         "id": c.id,
         "cart_number": c.cart_number,
@@ -28,8 +30,9 @@ def _cart_dict(c: models.Cart) -> dict:
         "last_hk_reader": c.last_hk_reader,
         "last_seen_at": c.last_seen_at.isoformat() if c.last_seen_at else None,
         "position_changed_at": pos_changed.isoformat() if pos_changed else None,
-        "corridor_minutes": corridor_minutes,
-        "kitarolt": corridor_minutes is not None and corridor_minutes >= 5,
+        "position_minutes": position_minutes,
+        "corridor_minutes": position_minutes if in_corridor else None,
+        "kitarolt": kitarolt,
         "assigned_operator": c.assigned_operator,
         "notes": c.notes,
         "rfid_epc": c.rfid_tag.epc if c.rfid_tag else None,
@@ -336,3 +339,23 @@ async def process_rfid_event(
         "from": old_position,
         "to": new_position,
     }
+
+
+@router.get("/movements")
+def list_movements(limit: int = 60, db: Session = Depends(get_db)):
+    """Legutóbbi mozgások listája."""
+    movements = db.query(models.CartMovement).options(
+        joinedload(models.CartMovement.cart)
+    ).order_by(models.CartMovement.moved_at.desc()).limit(limit).all()
+    return [
+        {
+            "id": m.id,
+            "cart_number": m.cart.cart_number if m.cart else "?",
+            "from": m.from_position,
+            "to": m.to_position,
+            "operator": m.operator,
+            "hk_reader": m.hk_reader,
+            "moved_at": m.moved_at.isoformat() if m.moved_at else None,
+        }
+        for m in movements
+    ]

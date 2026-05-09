@@ -85,7 +85,7 @@
             <thead class="table-light">
               <tr>
                 <th>Kód</th><th>Név</th><th>Sor</th><th>Típus</th>
-                <th>Hézagoló lemez</th><th>Megjegyzés</th><th></th>
+                <th>Megjegyzés</th><th></th>
               </tr>
             </thead>
             <tbody id="ws-tbody">
@@ -189,26 +189,6 @@
           <div class="col-md-4">
             <label class="form-label">Szín</label>
             <input type="color" class="form-control form-control-color w-100" id="ws-color" value="#3b82f6"></div>
-
-          <!-- Hézagoló lemez -->
-          <div class="col-12">
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="ws-shim-req" onchange="toggleShim(this.checked)">
-              <label class="form-check-label fw-semibold">
-                <i class="bi bi-layers me-1 text-warning"></i>Hézagoló lemez szükséges ennél az állomásnál
-              </label>
-            </div>
-          </div>
-          <div id="shim-fields" style="display:none" class="col-12">
-            <div class="row g-2">
-              <div class="col-md-8">
-                <label class="form-label">Hézagoló lemez leírása</label>
-                <input class="form-control" id="ws-shim-desc" placeholder="pl. 0.3mm acél hézagoló, 80x40mm"></div>
-              <div class="col-md-4">
-                <label class="form-label">Szükséges mennyiség</label>
-                <input type="number" class="form-control" id="ws-shim-qty" value="0" min="0"></div>
-            </div>
-          </div>
 
           <div class="col-12">
             <label class="form-label">Megjegyzés</label>
@@ -335,7 +315,6 @@ async function loadOverview() {
                       <div class="fw-bold">${ws.code}</div>
                       <div class="small text-muted">${ws.name||'–'}</div>
                       ${ws.current_work_description ? `<div class="small mt-1 text-success"><i class="bi bi-wrench me-1"></i>${ws.current_work_article||''} – ${ws.current_work_description.slice(0,30)}</div>` : ''}
-                      ${ws.shim_required ? `<div class="small mt-1"><span class="badge bg-warning-subtle text-warning"><i class="bi bi-layers me-1"></i>Hézagoló: ${ws.shim_quantity} db</span></div>` : ''}
                       <div class="d-flex gap-1 mt-1">
                         <button class="btn btn-xs btn-outline-primary" style="padding:1px 6px;font-size:.7rem" onclick="editWS(${JSON.stringify(ws).replace(/"/g,'&quot;')})"><i class="bi bi-pencil"></i></button>
                         <button class="btn btn-xs btn-outline-danger" style="padding:1px 6px;font-size:.7rem" onclick="deleteWS(${ws.id})"><i class="bi bi-trash"></i></button>
@@ -377,16 +356,13 @@ async function loadWorkstations() {
       <td>${ws.name||'–'}</td>
       <td>${ws.assembly_line ? `<span class="badge" style="background:${ws.assembly_line==='4270'?'#2563eb':'#d97706'}">${ws.assembly_line}</span>` : '–'}</td>
       <td><span class="badge bg-secondary">${ws.station_type||'assembly'}</span></td>
-      <td>${ws.shim_required
-        ? `<span class="text-warning fw-semibold"><i class="bi bi-layers me-1"></i>${ws.shim_quantity} db</span><br><small class="text-muted">${ws.shim_description||''}</small>`
-        : '<span class="text-muted">–</span>'}</td>
       <td class="small text-muted">${ws.notes||''}</td>
       <td>
         <button class="btn btn-sm btn-outline-primary me-1" onclick="editWS(${JSON.stringify(ws).replace(/"/g,'&quot;')})"><i class="bi bi-pencil"></i></button>
         <button class="btn btn-sm btn-outline-danger" onclick="deleteWS(${ws.id})"><i class="bi bi-trash"></i></button>
       </td>
     </tr>`).join('') ||
-    '<tr><td colspan="7" class="text-center text-muted py-3">Nincs munkaállomás</td></tr>';
+    '<tr><td colspan="6" class="text-center text-muted py-3">Nincs munkaállomás</td></tr>';
 }
 
 // ── Targoncások ───────────────────────────────────────────────────────────────
@@ -486,11 +462,7 @@ function openAddWS(hallId) {
   document.getElementById('ws-line').value = '';
   document.getElementById('ws-type').value = 'assembly';
   document.getElementById('ws-color').value = '#3b82f6';
-  document.getElementById('ws-shim-req').checked = false;
-  document.getElementById('ws-shim-desc').value = '';
-  document.getElementById('ws-shim-qty').value = '0';
   document.getElementById('ws-notes').value = '';
-  document.getElementById('shim-fields').style.display = 'none';
   document.getElementById('addWSModal').dataset.hallId = hallId;
   new bootstrap.Modal(document.getElementById('addWSModal')).show();
 }
@@ -503,16 +475,8 @@ function editWS(ws) {
   document.getElementById('ws-line').value = ws.assembly_line || '';
   document.getElementById('ws-type').value = ws.station_type || 'assembly';
   document.getElementById('ws-color').value = ws.color || '#3b82f6';
-  document.getElementById('ws-shim-req').checked = ws.shim_required;
-  document.getElementById('ws-shim-desc').value = ws.shim_description || '';
-  document.getElementById('ws-shim-qty').value = ws.shim_quantity || 0;
   document.getElementById('ws-notes').value = ws.notes || '';
-  toggleShim(ws.shim_required);
   new bootstrap.Modal(document.getElementById('addWSModal')).show();
-}
-
-function toggleShim(on) {
-  document.getElementById('shim-fields').style.display = on ? '' : 'none';
 }
 
 async function saveWorkstation() {
@@ -523,9 +487,6 @@ async function saveWorkstation() {
     assembly_line: document.getElementById('ws-line').value,
     station_type: document.getElementById('ws-type').value,
     color: document.getElementById('ws-color').value,
-    shim_required: document.getElementById('ws-shim-req').checked,
-    shim_description: document.getElementById('ws-shim-desc').value.trim(),
-    shim_quantity: document.getElementById('ws-shim-qty').value,
     notes: document.getElementById('ws-notes').value.trim(),
   });
 
