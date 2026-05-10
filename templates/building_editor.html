@@ -1,0 +1,1245 @@
+{% extends "base.html" %}
+{% block title %}3D Épület szerkesztő{% endblock %}
+{% block page_title %}3D Épület szerkesztő – RFID jel-lefedettség tervező{% endblock %}
+
+{% block topbar_actions %}
+<div class="btn-group btn-group-sm me-2" id="tool-group">
+  <button class="btn btn-outline-secondary active" id="btn-tool-wall"    onclick="setTool('wall')"     title="Fal rajzolása (W)"><i class="bi bi-border-all me-1"></i>Fal</button>
+  <button class="btn btn-outline-secondary"        id="btn-tool-box"     onclick="setTool('box')"      title="Akadály elhelyezése (B)"><i class="bi bi-box me-1"></i>Akadály</button>
+  <button class="btn btn-outline-secondary"        id="btn-tool-select"  onclick="setTool('select')"   title="Kijelölés / törlés (S)"><i class="bi bi-cursor me-1"></i>Kijelöl</button>
+  <button class="btn btn-outline-secondary"        id="btn-tool-reader"  onclick="setTool('reader')"   title="Olvasó kézi elhelyezés (R)"><i class="bi bi-wifi me-1"></i>Olvasó</button>
+</div>
+<button class="btn btn-sm btn-success fw-semibold me-2" onclick="autoPlaceReaders()">
+  <i class="bi bi-magic me-1"></i>Auto-elhelyezés
+</button>
+<button class="btn btn-sm btn-outline-info me-2" onclick="toggleCoverage()">
+  <i class="bi bi-layers me-1"></i><span id="cov-btn-txt">Hőtérkép be</span>
+</button>
+<button class="btn btn-sm btn-outline-secondary me-2" onclick="clearAll()">
+  <i class="bi bi-trash me-1"></i>Töröl mindent
+</button>
+<a href="/rtls-planner" class="btn btn-sm btn-outline-primary">
+  <i class="bi bi-arrow-left me-1"></i>RTLS Tervező
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-2 mb-2">
+  <!-- Material & building config bar -->
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2 px-3 d-flex flex-wrap align-items-center gap-3">
+        <!-- Material picker -->
+        <div class="d-flex align-items-center gap-2">
+          <span class="fw-semibold small text-muted">Anyag:</span>
+          <div class="d-flex gap-1" id="material-picker"></div>
+        </div>
+        <div class="vr"></div>
+        <!-- Building size -->
+        <div class="d-flex align-items-center gap-2">
+          <span class="fw-semibold small text-muted">Épület:</span>
+          <div class="input-group input-group-sm" style="width:90px">
+            <input type="number" class="form-control" id="bld-w" value="40" min="5" max="200" step="1"
+                   onchange="resizeBuilding()" title="Szélesség (m)">
+            <span class="input-group-text">m</span>
+          </div>
+          <span class="text-muted">×</span>
+          <div class="input-group input-group-sm" style="width:90px">
+            <input type="number" class="form-control" id="bld-d" value="25" min="5" max="200" step="1"
+                   onchange="resizeBuilding()" title="Mélység (m)">
+            <span class="input-group-text">m</span>
+          </div>
+          <div class="input-group input-group-sm" style="width:90px">
+            <input type="number" class="form-control" id="bld-h" value="5" min="2" max="20" step="0.5"
+                   onchange="resizeBuilding()" title="Belmagasság (m)">
+            <span class="input-group-text">m H</span>
+          </div>
+        </div>
+        <div class="vr"></div>
+        <!-- View toggle -->
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-secondary active" id="btn-view-2d" onclick="setView('2d')"><i class="bi bi-grid me-1"></i>2D rajz</button>
+          <button class="btn btn-outline-secondary"        id="btn-view-3d" onclick="setView('3d')"><i class="bi bi-box me-1"></i>3D nézet</button>
+          <button class="btn btn-outline-secondary"        id="btn-view-split" onclick="setView('split')"><i class="bi bi-layout-split me-1"></i>Kettő</button>
+        </div>
+        <div class="vr"></div>
+        <!-- Zoom 2D -->
+        <div class="d-flex align-items-center gap-1">
+          <button class="btn btn-sm btn-outline-secondary" onclick="zoom2D(-1)"><i class="bi bi-dash"></i></button>
+          <span class="small text-muted" id="zoom-label" style="min-width:40px;text-align:center">100%</span>
+          <button class="btn btn-sm btn-outline-secondary" onclick="zoom2D(1)"><i class="bi bi-plus"></i></button>
+          <button class="btn btn-sm btn-outline-secondary ms-1" onclick="fitView()" title="Igazít"><i class="bi bi-arrows-fullscreen"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Main panels -->
+<div class="row g-2" style="height:calc(100vh - 240px);min-height:480px">
+
+  <!-- 2D Canvas panel -->
+  <div id="panel-2d" class="col-12">
+    <div class="card border-0 shadow-sm h-100" style="overflow:hidden">
+      <div class="card-body p-0 h-100 position-relative">
+        <canvas id="canvas2d" style="width:100%;height:100%;cursor:crosshair;display:block"></canvas>
+        <!-- Help overlay -->
+        <div class="position-absolute bottom-0 start-0 p-2" style="pointer-events:none">
+          <div class="badge bg-dark bg-opacity-75 py-1 px-2" id="tool-hint" style="font-size:.72rem"></div>
+        </div>
+        <!-- Coordinate display -->
+        <div class="position-absolute bottom-0 end-0 p-2" style="pointer-events:none">
+          <div class="badge bg-dark bg-opacity-75 py-1 px-2" id="coord-display" style="font-size:.72rem">–</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3D Three.js panel -->
+  <div id="panel-3d" class="col-12 d-none">
+    <div class="card border-0 shadow-sm h-100" style="overflow:hidden">
+      <div class="card-body p-0 h-100">
+        <canvas id="canvas3d" style="width:100%;height:100%;display:block"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom stats bar -->
+<div class="row g-2 mt-2">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2 px-3 d-flex flex-wrap align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-danger px-2 py-1" style="font-size:.8rem">📡 <span id="stat-readers">0</span> olvasó</span>
+          <span class="badge bg-primary px-2 py-1" style="font-size:.8rem">🧱 <span id="stat-walls">0</span> fal</span>
+          <span class="badge bg-warning text-dark px-2 py-1" style="font-size:.8rem">📦 <span id="stat-obstacles">0</span> akadály</span>
+          <span class="badge px-2 py-1" id="stat-coverage-badge" style="font-size:.8rem;background:#6b7280">Lefedettség: –</span>
+        </div>
+        <div class="vr"></div>
+        <div class="small text-muted" id="stat-detail">Rajzolja be az épület falait és akadályait, majd kattintson az Auto-elhelyezés gombra.</div>
+        <div class="ms-auto d-flex gap-2">
+          <button class="btn btn-sm btn-outline-secondary" onclick="exportData()">
+            <i class="bi bi-download me-1"></i>Exportálás JSON
+          </button>
+          <button class="btn btn-sm btn-primary" onclick="sendToPlanner()">
+            <i class="bi bi-send me-1"></i>Küldés RTLS Tervezőbe
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Selected object properties -->
+<div class="position-fixed bottom-0 start-0 ms-5 mb-4 d-none" id="props-panel" style="z-index:1000;width:260px">
+  <div class="card shadow border-0">
+    <div class="card-header py-2 d-flex align-items-center justify-content-between">
+      <span class="fw-semibold small" id="props-title">Elem tulajdonságok</span>
+      <button class="btn-close btn-close-sm" onclick="deselectAll()"></button>
+    </div>
+    <div class="card-body py-2 px-3" id="props-body"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// KONFIGURÁCIÓ
+// ══════════════════════════════════════════════════════════════════════
+const SNAP = 0.5;      // rácsméret (m)
+const BASE_PPM = 20;   // alap pixel/méter
+
+const MATS = {
+  concrete:       { name:'Beton fal',          col:'#94a3b8', col3:0x94a3b8, pen:0.28, thick:0.20, defH:null },
+  brick:          { name:'Tégla fal',           col:'#b45309', col3:0xb45309, pen:0.22, thick:0.30, defH:null },
+  steel:          { name:'Acél/fém fal',        col:'#475569', col3:0x475569, pen:0.44, thick:0.10, defH:null },
+  metal_shelf:    { name:'Fém állványsor',      col:'#3b82f6', col3:0x3b82f6, pen:0.32, thick:0.50, defW:3, defD:0.6, defH:2.2 },
+  machinery:      { name:'Nehézgép/prés',       col:'#f59e0b', col3:0xf59e0b, pen:0.24, thick:1.0,  defW:2.5, defD:2.0, defH:2.0 },
+  column:         { name:'Pillar/oszlop',       col:'#64748b', col3:0x64748b, pen:0.40, thick:0.50, defW:0.6, defD:0.6, defH:null },
+  glass:          { name:'Üvegfal',             col:'#7dd3fc', col3:0x7dd3fc, pen:0.05, thick:0.10, defH:null },
+};
+
+const TOOL_HINTS = {
+  wall:   'Kattints + húzd a falak rajzolásához. Tartsd nyomva SHIFT-et vízszintes/függőleges kényszerhez.',
+  box:    'Kattintva elhelyezi az akadályt. Bal oldalt válassz anyagot. Kattints az elhelyezett elemre törléséhez.',
+  select: 'Kattints egy elemre a kijelöléshez. DEL vagy Backspace = törlés.',
+  reader: 'Kattints az olvasó kézi elhelyezéséhez. Jobb klikk = törlés.',
+};
+
+// ══════════════════════════════════════════════════════════════════════
+// ÁLLAPOT
+// ══════════════════════════════════════════════════════════════════════
+const bld = { w: 40, d: 25, h: 5 };
+const walls = [];        // {id, x1,z1,x2,z2, mat}
+const boxes = [];        // {id, x,z, w,d,h, mat}
+const readers = [];      // {id, x,z, auto}
+let nextId = 1;
+
+let activeTool = 'wall';
+let activeMat  = 'concrete';
+let selectedId = null;
+let currentView = '2d';
+
+// Canvas 2D state
+let c2d, ctx2d;
+let ppm = BASE_PPM;      // pixel per méter
+let oX = 40, oY = 40;   // canvas offset (building origin in canvas px)
+let drawStart = null;    // {x,z} in meters
+let mouseM = null;       // current mouse in meters
+
+// Coverage
+let coverageMap = null;  // Float32Array
+let covCols, covRows;
+let showCoverage = false;
+let coverageTexture = null;
+
+// 3D
+let renderer3, scene3, camera3, controls3;
+let wallsGrp, boxesGrp, readersGrp, heatGrp;
+let heatMesh3 = null;
+let animId;
+
+// ══════════════════════════════════════════════════════════════════════
+// ANYAG PICKER
+// ══════════════════════════════════════════════════════════════════════
+function initMaterialPicker() {
+  const el = document.getElementById('material-picker');
+  el.innerHTML = Object.entries(MATS).map(([k,m]) => `
+    <button class="mat-btn btn btn-sm border-2" id="mat-${k}" data-mat="${k}" onclick="setMat('${k}')"
+            style="background:${m.col};border-color:${m.col};color:white;font-size:.7rem;padding:3px 8px"
+            title="${m.name}">
+      ${m.name.split(' ')[0]}
+    </button>`).join('');
+  setMat('concrete');
+}
+
+function setMat(key) {
+  activeMat = key;
+  document.querySelectorAll('.mat-btn').forEach(b => {
+    b.style.boxShadow = b.dataset.mat === key ? '0 0 0 3px #fff,0 0 0 5px #3b82f6' : '';
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ESZKÖZ
+// ══════════════════════════════════════════════════════════════════════
+function setTool(t) {
+  activeTool = t;
+  document.querySelectorAll('#tool-group .btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`btn-tool-${t}`).classList.add('active');
+  document.getElementById('tool-hint').textContent = TOOL_HINTS[t];
+  c2d.style.cursor = t === 'select' ? 'default' : t === 'reader' ? 'cell' : 'crosshair';
+  deselectAll();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 2D CANVAS SETUP
+// ══════════════════════════════════════════════════════════════════════
+function initCanvas2D() {
+  c2d = document.getElementById('canvas2d');
+  ctx2d = c2d.getContext('2d');
+  resizeCanvas2D();
+  window.addEventListener('resize', resizeCanvas2D);
+
+  c2d.addEventListener('mousedown', onMouseDown2D);
+  c2d.addEventListener('mousemove', onMouseMove2D);
+  c2d.addEventListener('mouseup',   onMouseUp2D);
+  c2d.addEventListener('contextmenu', e => { e.preventDefault(); onRightClick2D(e); });
+  c2d.addEventListener('wheel', e => { e.preventDefault(); zoom2D(e.deltaY < 0 ? 1 : -1); });
+
+  document.addEventListener('keydown', onKey);
+}
+
+function resizeCanvas2D() {
+  const parent = c2d.parentElement;
+  c2d.width  = parent.clientWidth;
+  c2d.height = parent.clientHeight;
+  draw2D();
+}
+
+function mToC(mx, mz) { return { x: oX + mx * ppm, y: oY + mz * ppm }; }
+function cToM(cx, cy) { return { x: (cx - oX) / ppm, z: (cy - oY) / ppm }; }
+function snap(v) { return Math.round(v / SNAP) * SNAP; }
+function snapPos(m) { return { x: snap(m.x), z: snap(m.z) }; }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function clampPos(m) { return { x: clamp(m.x, 0, bld.w), z: clamp(m.z, 0, bld.d) }; }
+
+// ══════════════════════════════════════════════════════════════════════
+// DRAW 2D
+// ══════════════════════════════════════════════════════════════════════
+function draw2D() {
+  const W = c2d.width, H = c2d.height;
+  ctx2d.clearRect(0, 0, W, H);
+
+  // Background
+  ctx2d.fillStyle = '#e2e8f0';
+  ctx2d.fillRect(0, 0, W, H);
+
+  // Building fill
+  const bp = mToC(0, 0), bpE = mToC(bld.w, bld.d);
+  const bW = bpE.x - bp.x, bH = bpE.y - bp.y;
+  ctx2d.fillStyle = '#f8fafc';
+  ctx2d.fillRect(bp.x, bp.y, bW, bH);
+
+  // Grid
+  ctx2d.strokeStyle = '#e2e8f0';
+  ctx2d.lineWidth = ppm >= 30 ? 0.5 : 0.3;
+  for (let x = 0; x <= bld.w; x++) {
+    const cp = mToC(x, 0), cpE = mToC(x, bld.d);
+    ctx2d.beginPath(); ctx2d.moveTo(cp.x, cp.y); ctx2d.lineTo(cpE.x, cpE.y); ctx2d.stroke();
+  }
+  for (let z = 0; z <= bld.d; z++) {
+    const cp = mToC(0, z), cpE = mToC(bld.w, z);
+    ctx2d.beginPath(); ctx2d.moveTo(cp.x, cp.y); ctx2d.lineTo(cpE.x, cpE.y); ctx2d.stroke();
+  }
+
+  // 5m grid accent
+  if (ppm >= 10) {
+    ctx2d.strokeStyle = '#cbd5e1';
+    ctx2d.lineWidth = 0.8;
+    for (let x = 0; x <= bld.w; x += 5) {
+      const cp = mToC(x, 0), cpE = mToC(x, bld.d);
+      ctx2d.beginPath(); ctx2d.moveTo(cp.x, cp.y); ctx2d.lineTo(cpE.x, cpE.y); ctx2d.stroke();
+    }
+    for (let z = 0; z <= bld.d; z += 5) {
+      const cp = mToC(0, z), cpE = mToC(bld.w, z);
+      ctx2d.beginPath(); ctx2d.moveTo(cp.x, cp.y); ctx2d.lineTo(cpE.x, cpE.y); ctx2d.stroke();
+    }
+  }
+
+  // Coverage heatmap
+  if (showCoverage && coverageMap) drawHeatmap2D();
+
+  // Obstacles (boxes)
+  for (const b of boxes) {
+    const m = MATS[b.mat];
+    const p1 = mToC(b.x, b.z), p2 = mToC(b.x + b.w, b.z + b.d);
+    const bw = p2.x - p1.x, bd = p2.y - p1.y;
+    ctx2d.globalAlpha = 0.85;
+    ctx2d.fillStyle = m.col;
+    ctx2d.fillRect(p1.x, p1.y, bw, bd);
+    if (b.id === selectedId) {
+      ctx2d.strokeStyle = '#fff';
+      ctx2d.lineWidth = 2;
+      ctx2d.strokeRect(p1.x+1, p1.y+1, bw-2, bd-2);
+      ctx2d.strokeStyle = '#3b82f6';
+      ctx2d.lineWidth = 2;
+      ctx2d.strokeRect(p1.x-1, p1.y-1, bw+2, bd+2);
+    }
+    ctx2d.globalAlpha = 1;
+    if (ppm >= 18) {
+      ctx2d.fillStyle = 'white';
+      ctx2d.font = `bold ${Math.max(8, Math.min(11, ppm*0.5))}px system-ui`;
+      ctx2d.textAlign = 'center';
+      ctx2d.textBaseline = 'middle';
+      ctx2d.fillText(m.name.split(' ')[0].substring(0,6), (p1.x+p2.x)/2, (p1.y+p2.y)/2);
+    }
+  }
+
+  // Walls
+  for (const w of walls) {
+    const m = MATS[w.mat];
+    const p1 = mToC(w.x1, w.z1), p2 = mToC(w.x2, w.z2);
+    const dx = w.x2 - w.x1, dz = w.z2 - w.z1;
+    const len = Math.sqrt(dx*dx + dz*dz);
+    if (len < 0.01) continue;
+    const thick = Math.max(3, m.thick * ppm);
+    const nx = -dz / len, nz = dx / len;
+    const tx = nx * thick/2, ty = nz * thick/2;
+
+    ctx2d.beginPath();
+    ctx2d.moveTo(p1.x + tx, p1.y + ty);
+    ctx2d.lineTo(p2.x + tx, p2.y + ty);
+    ctx2d.lineTo(p2.x - tx, p2.y - ty);
+    ctx2d.lineTo(p1.x - tx, p1.y - ty);
+    ctx2d.closePath();
+    ctx2d.fillStyle = m.col;
+    ctx2d.globalAlpha = 0.9;
+    ctx2d.fill();
+    if (w.id === selectedId) {
+      ctx2d.strokeStyle = '#3b82f6';
+      ctx2d.lineWidth = 2;
+      ctx2d.stroke();
+    }
+    ctx2d.globalAlpha = 1;
+
+    // Length label
+    if (ppm >= 20 && len > 0.5) {
+      const mx = (p1.x+p2.x)/2, my = (p1.y+p2.y)/2;
+      ctx2d.fillStyle = '#1e293b';
+      ctx2d.font = '9px system-ui';
+      ctx2d.textAlign = 'center';
+      ctx2d.textBaseline = 'middle';
+      ctx2d.fillText(len.toFixed(1)+'m', mx, my);
+    }
+  }
+
+  // Preview wall
+  if (drawStart && mouseM && activeTool === 'wall') {
+    let ex = mouseM.x, ez = mouseM.z;
+    if (shiftDown) {
+      const dx = Math.abs(ex - drawStart.x), dz = Math.abs(ez - drawStart.z);
+      if (dx > dz) ez = drawStart.z; else ex = drawStart.x;
+    }
+    const p1 = mToC(drawStart.x, drawStart.z), p2 = mToC(ex, ez);
+    const m = MATS[activeMat];
+    ctx2d.beginPath();
+    ctx2d.moveTo(p1.x, p1.y); ctx2d.lineTo(p2.x, p2.y);
+    ctx2d.strokeStyle = m.col;
+    ctx2d.lineWidth = Math.max(3, m.thick * ppm);
+    ctx2d.globalAlpha = 0.6;
+    ctx2d.stroke();
+    ctx2d.globalAlpha = 1;
+    // Start dot
+    ctx2d.beginPath();
+    ctx2d.arc(p1.x, p1.y, 5, 0, Math.PI*2);
+    ctx2d.fillStyle = m.col;
+    ctx2d.fill();
+  }
+
+  // Preview box placement
+  if (mouseM && activeTool === 'box') {
+    const m = MATS[activeMat];
+    const dw = m.defW || 2, dd = m.defD || 2;
+    const p1 = mToC(mouseM.x, mouseM.z), p2 = mToC(mouseM.x + dw, mouseM.z + dd);
+    ctx2d.fillStyle = m.col;
+    ctx2d.globalAlpha = 0.45;
+    ctx2d.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+    ctx2d.globalAlpha = 1;
+  }
+
+  // RFID Readers
+  for (const r of readers) {
+    const p = mToC(r.x, r.z);
+    const rad = Math.max(7, ppm * 0.4);
+    ctx2d.beginPath();
+    ctx2d.arc(p.x, p.y, rad, 0, Math.PI*2);
+    ctx2d.fillStyle = r.auto ? '#ef4444' : '#f97316';
+    ctx2d.strokeStyle = 'white';
+    ctx2d.lineWidth = 2;
+    ctx2d.globalAlpha = 0.9;
+    ctx2d.fill();
+    ctx2d.stroke();
+    // Signal rings
+    ctx2d.globalAlpha = 0.18;
+    for (let ri = 1; ri <= 3; ri++) {
+      ctx2d.beginPath();
+      ctx2d.arc(p.x, p.y, rad + ri * (ppm * 2.5), 0, Math.PI*2);
+      ctx2d.strokeStyle = '#ef4444';
+      ctx2d.lineWidth = 1;
+      ctx2d.stroke();
+    }
+    ctx2d.globalAlpha = 1;
+    if (ppm >= 15) {
+      ctx2d.fillStyle = 'white';
+      ctx2d.font = `bold ${Math.max(8,ppm*0.45)}px system-ui`;
+      ctx2d.textAlign = 'center';
+      ctx2d.textBaseline = 'middle';
+      ctx2d.fillText('R', p.x, p.y);
+    }
+    if (r.id === selectedId) {
+      ctx2d.beginPath();
+      ctx2d.arc(p.x, p.y, rad + 3, 0, Math.PI*2);
+      ctx2d.strokeStyle = '#3b82f6';
+      ctx2d.lineWidth = 2;
+      ctx2d.stroke();
+    }
+  }
+
+  // Building outline (on top)
+  ctx2d.strokeStyle = '#334155';
+  ctx2d.lineWidth = 2;
+  ctx2d.strokeRect(bp.x, bp.y, bW, bH);
+
+  // Scale bar
+  drawScaleBar();
+
+  // Dimension labels
+  if (ppm >= 10) {
+    ctx2d.fillStyle = '#64748b';
+    ctx2d.font = '11px system-ui';
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'top';
+    ctx2d.fillText(`${bld.w} m`, bp.x + bW/2, bp.y - 16);
+    ctx2d.save();
+    ctx2d.translate(bp.x - 18, bp.y + bH/2);
+    ctx2d.rotate(-Math.PI/2);
+    ctx2d.fillText(`${bld.d} m`, 0, 0);
+    ctx2d.restore();
+  }
+}
+
+function drawScaleBar() {
+  const barM = 5; // 5 meters
+  const barPx = barM * ppm;
+  const x = 20, y = c2d.height - 28;
+  ctx2d.fillStyle = 'rgba(15,23,42,0.7)';
+  ctx2d.fillRect(x-4, y-4, barPx + 60, 22);
+  ctx2d.strokeStyle = 'white';
+  ctx2d.lineWidth = 2;
+  ctx2d.beginPath();
+  ctx2d.moveTo(x, y+8); ctx2d.lineTo(x+barPx, y+8);
+  ctx2d.moveTo(x, y+3); ctx2d.lineTo(x, y+13);
+  ctx2d.moveTo(x+barPx, y+3); ctx2d.lineTo(x+barPx, y+13);
+  ctx2d.stroke();
+  ctx2d.fillStyle = 'white';
+  ctx2d.font = 'bold 11px system-ui';
+  ctx2d.textAlign = 'left';
+  ctx2d.textBaseline = 'middle';
+  ctx2d.fillText(`${barM} m`, x + barPx + 6, y+8);
+}
+
+function drawHeatmap2D() {
+  if (!coverageMap || !covCols || !covRows) return;
+  const cellW = ppm / 1, cellH = ppm / 1; // 1m cells
+  for (let ci = 0; ci < covCols; ci++) {
+    for (let cj = 0; cj < covRows; cj++) {
+      const s = coverageMap[ci * covRows + cj];
+      const p = mToC(ci, cj);
+      ctx2d.fillStyle = signalColor(s, 0.5);
+      ctx2d.fillRect(p.x, p.y, cellW+0.5, cellH+0.5);
+    }
+  }
+}
+
+function signalColor(s, alpha) {
+  if (s >= 0.75) return `rgba(59,130,246,${alpha})`;
+  if (s >= 0.5)  return `rgba(34,197,94,${alpha})`;
+  if (s >= 0.25) return `rgba(234,179,8,${alpha})`;
+  if (s >= 0.08) return `rgba(249,115,22,${alpha})`;
+  return `rgba(239,68,68,${alpha+0.1})`;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// MOUSE EVENTS 2D
+// ══════════════════════════════════════════════════════════════════════
+let shiftDown = false;
+let middleDrag = false, lastMiddle = null;
+
+document.addEventListener('keydown', e => { shiftDown = e.shiftKey; });
+document.addEventListener('keyup',   e => { shiftDown = e.shiftKey; });
+
+function onMouseDown2D(e) {
+  if (e.button === 1) { middleDrag = true; lastMiddle = {x:e.clientX, y:e.clientY}; e.preventDefault(); return; }
+  if (e.button !== 0) return;
+
+  const m = clampPos(snapPos(cToM(e.offsetX, e.offsetY)));
+
+  if (activeTool === 'wall') {
+    drawStart = { x: m.x, z: m.z };
+
+  } else if (activeTool === 'box') {
+    const mat = MATS[activeMat];
+    const dw = mat.defW || 2, dd = mat.defD || 2;
+    addBox(clamp(m.x, 0, bld.w - dw), clamp(m.z, 0, bld.d - dd), dw, dd, bld.h * 0.6, activeMat);
+
+  } else if (activeTool === 'reader') {
+    addReader(m.x, m.z, false);
+
+  } else if (activeTool === 'select') {
+    const hit = hitTest(m);
+    if (hit) selectObject(hit.type, hit.id);
+    else deselectAll();
+  }
+}
+
+function onMouseMove2D(e) {
+  if (middleDrag) {
+    oX += e.clientX - lastMiddle.x;
+    oY += e.clientY - lastMiddle.y;
+    lastMiddle = {x:e.clientX, y:e.clientY};
+    draw2D(); return;
+  }
+  const m = clampPos(snapPos(cToM(e.offsetX, e.offsetY)));
+  mouseM = m;
+  document.getElementById('coord-display').textContent = `X: ${m.x.toFixed(1)}m  Z: ${m.z.toFixed(1)}m`;
+  draw2D();
+}
+
+function onMouseUp2D(e) {
+  if (e.button === 1) { middleDrag = false; return; }
+  if (e.button !== 0 || activeTool !== 'wall' || !drawStart) return;
+  let m = clampPos(snapPos(cToM(e.offsetX, e.offsetY)));
+
+  if (shiftDown) {
+    const dx = Math.abs(m.x - drawStart.x), dz = Math.abs(m.z - drawStart.z);
+    if (dx > dz) m.z = drawStart.z; else m.x = drawStart.x;
+  }
+
+  const len = Math.sqrt((m.x-drawStart.x)**2 + (m.z-drawStart.z)**2);
+  if (len >= SNAP * 0.9) {
+    addWall(drawStart.x, drawStart.z, m.x, m.z, activeMat);
+  }
+  drawStart = null;
+  draw2D();
+}
+
+function onRightClick2D(e) {
+  const m = snapPos(cToM(e.offsetX, e.offsetY));
+  const hit = hitTest(m);
+  if (hit) deleteObject(hit.type, hit.id);
+}
+
+function onKey(e) {
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selectedId) deleteObject(null, selectedId);
+  }
+  if (e.key === 'w' || e.key === 'W') setTool('wall');
+  if (e.key === 'b' || e.key === 'B') setTool('box');
+  if (e.key === 's' || e.key === 'S') setTool('select');
+  if (e.key === 'r' || e.key === 'R') setTool('reader');
+  if (e.key === 'Escape') { deselectAll(); drawStart = null; draw2D(); }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// HIT TESZT
+// ══════════════════════════════════════════════════════════════════════
+function hitTest(m) {
+  const TOL = Math.max(0.3, 2/ppm);
+  // Readers
+  for (const r of readers) {
+    if (Math.hypot(m.x-r.x, m.z-r.z) < TOL + 0.3) return {type:'reader', id:r.id};
+  }
+  // Boxes
+  for (const b of boxes) {
+    if (m.x >= b.x-TOL && m.x <= b.x+b.w+TOL && m.z >= b.z-TOL && m.z <= b.z+b.d+TOL) return {type:'box',id:b.id};
+  }
+  // Walls
+  for (const w of walls) {
+    const dist = pointToSegDist(m.x, m.z, w.x1, w.z1, w.x2, w.z2);
+    if (dist < TOL + 0.15) return {type:'wall', id:w.id};
+  }
+  return null;
+}
+
+function pointToSegDist(px, pz, x1, z1, x2, z2) {
+  const dx = x2-x1, dz = z2-z1;
+  const len2 = dx*dx + dz*dz;
+  if (len2 < 1e-8) return Math.hypot(px-x1, pz-z1);
+  const t = Math.max(0, Math.min(1, ((px-x1)*dx + (pz-z1)*dz) / len2));
+  return Math.hypot(px - (x1 + t*dx), pz - (z1 + t*dz));
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DATA OPERATIONS
+// ══════════════════════════════════════════════════════════════════════
+function addWall(x1, z1, x2, z2, mat) {
+  const id = nextId++;
+  walls.push({ id, x1, z1, x2, z2, mat });
+  onDataChanged();
+  return id;
+}
+
+function addBox(x, z, w, d, h, mat) {
+  const id = nextId++;
+  boxes.push({ id, x, z, w, d, h, mat });
+  onDataChanged();
+  return id;
+}
+
+function addReader(x, z, auto) {
+  const id = nextId++;
+  readers.push({ id, x, z, auto });
+  onDataChanged();
+  return id;
+}
+
+function deleteObject(type, id) {
+  const idx_w = walls.findIndex(o => o.id === id);
+  if (idx_w >= 0) { walls.splice(idx_w, 1); }
+  const idx_b = boxes.findIndex(o => o.id === id);
+  if (idx_b >= 0) { boxes.splice(idx_b, 1); }
+  const idx_r = readers.findIndex(o => o.id === id);
+  if (idx_r >= 0) { readers.splice(idx_r, 1); }
+  if (selectedId === id) deselectAll();
+  onDataChanged();
+}
+
+function clearAll() {
+  if (!confirm('Biztosan törli az összes falat, akadályt és olvasót?')) return;
+  walls.length = 0; boxes.length = 0; readers.length = 0;
+  onDataChanged();
+}
+
+function selectObject(type, id) {
+  selectedId = id;
+  showPropsPanel(type, id);
+  draw2D();
+}
+
+function deselectAll() {
+  selectedId = null;
+  document.getElementById('props-panel').classList.add('d-none');
+  draw2D();
+}
+
+function showPropsPanel(type, id) {
+  const panel = document.getElementById('props-panel');
+  const title = document.getElementById('props-title');
+  const body  = document.getElementById('props-body');
+  panel.classList.remove('d-none');
+
+  if (type === 'wall') {
+    const w = walls.find(x => x.id === id);
+    if (!w) return;
+    const len = Math.hypot(w.x2-w.x1, w.z2-w.z1);
+    title.textContent = 'Fal tulajdonságok';
+    body.innerHTML = `
+      <div class="mb-2 small"><strong>Hossz:</strong> ${len.toFixed(1)} m</div>
+      <div class="mb-2 small"><strong>Anyag:</strong> ${MATS[w.mat].name}</div>
+      <div class="mb-2 small"><strong>Csillapítás:</strong> −${Math.round(MATS[w.mat].pen*100)}%</div>
+      <div class="mb-2">
+        <label class="form-label small fw-semibold">Anyag módosítása:</label>
+        <select class="form-select form-select-sm" onchange="changeWallMat(${id},this.value)">
+          ${Object.entries(MATS).filter(([k]) => !['metal_shelf','machinery','column'].includes(k))
+            .map(([k,m]) => `<option value="${k}" ${w.mat===k?'selected':''}>${m.name}</option>`).join('')}
+        </select>
+      </div>
+      <button class="btn btn-sm btn-danger w-100" onclick="deleteObject('wall',${id})">
+        <i class="bi bi-trash me-1"></i>Fal törlése
+      </button>`;
+  } else if (type === 'box') {
+    const b = boxes.find(x => x.id === id);
+    if (!b) return;
+    title.textContent = 'Akadály tulajdonságok';
+    body.innerHTML = `
+      <div class="mb-2 small"><strong>Anyag:</strong> ${MATS[b.mat].name}</div>
+      <div class="mb-2 small"><strong>Méret:</strong> ${b.w}×${b.d} m, ${b.h} m magas</div>
+      <div class="mb-2 small"><strong>Csillapítás:</strong> −${Math.round(MATS[b.mat].pen*100)}%</div>
+      <div class="row g-2 mb-2">
+        <div class="col-6"><label class="small">Szélesség (m)</label>
+          <input type="number" class="form-control form-control-sm" value="${b.w}" step="0.5" min="0.5"
+                 onchange="updateBox(${id},'w',+this.value)"></div>
+        <div class="col-6"><label class="small">Mélység (m)</label>
+          <input type="number" class="form-control form-control-sm" value="${b.d}" step="0.5" min="0.5"
+                 onchange="updateBox(${id},'d',+this.value)"></div>
+      </div>
+      <button class="btn btn-sm btn-danger w-100" onclick="deleteObject('box',${id})">
+        <i class="bi bi-trash me-1"></i>Akadály törlése
+      </button>`;
+  } else if (type === 'reader') {
+    const r = readers.find(x => x.id === id);
+    if (!r) return;
+    title.textContent = 'RFID Olvasó';
+    body.innerHTML = `
+      <div class="mb-2 small"><strong>Pozíció:</strong> X=${r.x.toFixed(1)}m, Z=${r.z.toFixed(1)}m</div>
+      <div class="mb-2 small"><strong>Elhelyezés:</strong> ${r.auto ? '🤖 Automatikus' : '👆 Kézi'}</div>
+      <button class="btn btn-sm btn-danger w-100" onclick="deleteObject('reader',${id})">
+        <i class="bi bi-trash me-1"></i>Olvasó törlése
+      </button>`;
+  }
+}
+
+function changeWallMat(id, mat) {
+  const w = walls.find(x => x.id === id);
+  if (w) { w.mat = mat; onDataChanged(); }
+}
+
+function updateBox(id, prop, val) {
+  const b = boxes.find(x => x.id === id);
+  if (b) { b[prop] = val; onDataChanged(); }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// COVERAGE CALCULATION
+// ══════════════════════════════════════════════════════════════════════
+const RES = 1; // 1m grid
+
+function getSignal(rx, rz, cx, cz) {
+  const ATTEN = { concrete:0.72, brick:0.78, steel:0.56, metal_shelf:0.68, machinery:0.76, column:0.62, glass:0.95 };
+  const dist = Math.hypot(cx-rx, cz-rz);
+  if (dist < 0.1) return 1.0;
+  const BASE_R = 22;
+  let s = Math.max(0, 1 - dist/BASE_R);
+  s = s * s;
+  for (const w of walls) {
+    if (segmentsIntersect(rx,rz,cx,cz, w.x1,w.z1,w.x2,w.z2))
+      s *= ATTEN[w.mat] || 0.75;
+  }
+  for (const b of boxes) {
+    if (lineIntersectsRect(rx,rz,cx,cz, b.x,b.z,b.x+b.w,b.z+b.d))
+      s *= ATTEN[b.mat] || 0.80;
+  }
+  return Math.max(0, s);
+}
+
+function computeCoverage() {
+  covCols = Math.ceil(bld.w / RES);
+  covRows = Math.ceil(bld.d / RES);
+  coverageMap = new Float32Array(covCols * covRows);
+  for (let ci = 0; ci < covCols; ci++) {
+    for (let cj = 0; cj < covRows; cj++) {
+      const cx = ci * RES + RES/2, cz = cj * RES + RES/2;
+      let best = 0;
+      for (const r of readers) {
+        const s = getSignal(r.x, r.z, cx, cz);
+        if (s > best) best = s;
+      }
+      coverageMap[ci * covRows + cj] = best;
+    }
+  }
+  const covered = Array.from(coverageMap).filter(v => v > 0.08).length;
+  const pct = Math.round(covered / (covCols * covRows) * 100);
+  const badge = document.getElementById('stat-coverage-badge');
+  badge.textContent = `Lefedettség: ${pct}%`;
+  badge.style.background = pct >= 85 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444';
+  return { covered, total: covCols*covRows, pct };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// AUTO READER PLACEMENT
+// ══════════════════════════════════════════════════════════════════════
+function autoPlaceReaders() {
+  // Remove auto readers
+  let i = readers.length;
+  while (i--) { if (readers[i].auto) readers.splice(i, 1); }
+
+  covCols = Math.ceil(bld.w / RES);
+  covRows = Math.ceil(bld.d / RES);
+
+  // All floor cells
+  const total = covCols * covRows;
+  const uncovered = new Set();
+  for (let k = 0; k < total; k++) uncovered.add(k);
+
+  // Candidate positions every ~3m
+  const STEP = 3;
+  const candidates = [];
+  for (let x = STEP/2; x < bld.w; x += STEP)
+    for (let z = STEP/2; z < bld.d; z += STEP)
+      candidates.push({ x: snap(x), z: snap(z) });
+
+  const MAX_R = 30;
+  let safetyBreak = 0;
+
+  while (uncovered.size > total * 0.04 && readers.length < MAX_R && safetyBreak++ < 100) {
+    let best = null, bestScore = 0;
+
+    for (const cand of candidates) {
+      if (readers.some(r => Math.hypot(r.x-cand.x, r.z-cand.z) < 1.0)) continue;
+      let score = 0;
+      for (const k of uncovered) {
+        const ci = Math.floor(k / covRows), cj = k % covRows;
+        const cx = ci*RES + RES/2, cz = cj*RES + RES/2;
+        if (getSignal(cand.x, cand.z, cx, cz) > 0.08) score++;
+      }
+      if (score > bestScore) { bestScore = score; best = cand; }
+    }
+
+    if (!best || bestScore === 0) break;
+
+    const rid = nextId++;
+    readers.push({ id: rid, x: best.x, z: best.z, auto: true });
+
+    // Remove newly covered cells
+    for (const k of [...uncovered]) {
+      const ci = Math.floor(k / covRows), cj = k % covRows;
+      const cx = ci*RES + RES/2, cz = cj*RES + RES/2;
+      if (getSignal(best.x, best.z, cx, cz) > 0.08) uncovered.delete(k);
+    }
+  }
+
+  showCoverage = true;
+  document.getElementById('cov-btn-txt').textContent = 'Hőtérkép ki';
+  onDataChanged();
+  showToast(`${readers.filter(r=>r.auto).length} olvasó automatikusan elhelyezve`, 'success');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// GEOMETRIA SEGÉD
+// ══════════════════════════════════════════════════════════════════════
+function segmentsIntersect(x1,y1,x2,y2,x3,y3,x4,y4) {
+  const d1x=x2-x1,d1y=y2-y1, d2x=x4-x3,d2y=y4-y3;
+  const c = d1x*d2y - d1y*d2x;
+  if (Math.abs(c) < 1e-10) return false;
+  const t = ((x3-x1)*d2y - (y3-y1)*d2x) / c;
+  const u = ((x3-x1)*d1y - (y3-y1)*d1x) / c;
+  return t>=0&&t<=1&&u>=0&&u<=1;
+}
+
+function lineIntersectsRect(x1,y1,x2,y2,minX,minY,maxX,maxY) {
+  if (x1>=minX&&x1<=maxX&&y1>=minY&&y1<=maxY) return true;
+  if (x2>=minX&&x2<=maxX&&y2>=minY&&y2<=maxY) return true;
+  return segmentsIntersect(x1,y1,x2,y2,minX,minY,maxX,minY) ||
+         segmentsIntersect(x1,y1,x2,y2,maxX,minY,maxX,maxY) ||
+         segmentsIntersect(x1,y1,x2,y2,maxX,maxY,minX,maxY) ||
+         segmentsIntersect(x1,y1,x2,y2,minX,maxY,minX,minY);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// THREE.JS 3D SETUP
+// ══════════════════════════════════════════════════════════════════════
+function init3D() {
+  const c = document.getElementById('canvas3d');
+  renderer3 = new THREE.WebGLRenderer({ canvas: c, antialias: true });
+  renderer3.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer3.shadowMap.enabled = true;
+  renderer3.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer3.setClearColor(0xf1f5f9);
+
+  scene3 = new THREE.Scene();
+  scene3.fog = new THREE.Fog(0xf1f5f9, 80, 150);
+
+  camera3 = new THREE.PerspectiveCamera(55, 1, 0.1, 500);
+  resetCamera3D();
+
+  controls3 = new THREE.OrbitControls(camera3, renderer3.domElement);
+  controls3.enableDamping = true;
+  controls3.dampingFactor = 0.06;
+  controls3.minDistance = 2;
+  controls3.maxDistance = 120;
+  controls3.maxPolarAngle = Math.PI / 2.05;
+
+  // Lights
+  const amb = new THREE.AmbientLight(0xffffff, 0.55);
+  scene3.add(amb);
+  const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+  sun.position.set(bld.w * 0.8, bld.h * 4, bld.d * 0.5);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  scene3.add(sun);
+  const fill = new THREE.DirectionalLight(0xcbdcf8, 0.3);
+  fill.position.set(-bld.w, bld.h, -bld.d);
+  scene3.add(fill);
+
+  // Floor plane
+  const floorGeo = new THREE.PlaneGeometry(bld.w + 10, bld.d + 10);
+  const floorMat = new THREE.MeshLambertMaterial({ color: 0xdde3ec });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI/2;
+  floor.position.set(bld.w/2, -0.01, bld.d/2);
+  floor.receiveShadow = true;
+  floor.userData.permanent = true;
+  scene3.add(floor);
+
+  // Building floor
+  const bldFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(bld.w, bld.d),
+    new THREE.MeshLambertMaterial({ color: 0xf1f5f9 })
+  );
+  bldFloor.rotation.x = -Math.PI/2;
+  bldFloor.position.set(bld.w/2, 0, bld.d/2);
+  bldFloor.receiveShadow = true;
+  bldFloor.userData.permanent = true;
+  scene3.add(bldFloor);
+
+  // Grid
+  const grid = new THREE.GridHelper(Math.max(bld.w, bld.d) + 4, Math.max(bld.w, bld.d) + 4, 0xb0bec5, 0xcfd8dc);
+  grid.position.set(bld.w/2, 0.001, bld.d/2);
+  grid.userData.permanent = true;
+  scene3.add(grid);
+
+  // Groups
+  wallsGrp    = new THREE.Group(); scene3.add(wallsGrp);
+  boxesGrp    = new THREE.Group(); scene3.add(boxesGrp);
+  readersGrp  = new THREE.Group(); scene3.add(readersGrp);
+  heatGrp     = new THREE.Group(); scene3.add(heatGrp);
+
+  // Building outline (ceiling frame)
+  buildBldOutline3D();
+
+  resize3D();
+  window.addEventListener('resize', resize3D);
+
+  animate3D();
+}
+
+function buildBldOutline3D() {
+  const mat = new THREE.LineBasicMaterial({ color: 0x334155, linewidth: 2 });
+  const pts = [
+    new THREE.Vector3(0,0,0), new THREE.Vector3(bld.w,0,0), new THREE.Vector3(bld.w,0,bld.d), new THREE.Vector3(0,0,bld.d), new THREE.Vector3(0,0,0),
+    new THREE.Vector3(0,bld.h,0), new THREE.Vector3(bld.w,bld.h,0), new THREE.Vector3(bld.w,bld.h,bld.d), new THREE.Vector3(0,bld.h,bld.d), new THREE.Vector3(0,bld.h,0),
+  ];
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const line = new THREE.Line(geo, mat);
+  line.userData.permanent = true;
+  scene3.add(line);
+  // Vertical edges
+  [[0,0],[bld.w,0],[bld.w,bld.d],[0,bld.d]].forEach(([x,z]) => {
+    const vGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x,0,z), new THREE.Vector3(x,bld.h,z)]);
+    const vLine = new THREE.Line(vGeo, mat);
+    vLine.userData.permanent = true;
+    scene3.add(vLine);
+  });
+}
+
+function resetCamera3D() {
+  controls3?.target.set(bld.w/2, 0, bld.d/2);
+  camera3.position.set(bld.w*1.1, bld.h*3, bld.d*1.6);
+  camera3.lookAt(bld.w/2, 0, bld.d/2);
+}
+
+function resize3D() {
+  const c = document.getElementById('canvas3d');
+  const p = c.parentElement;
+  renderer3.setSize(p.clientWidth, p.clientHeight);
+  camera3.aspect = p.clientWidth / p.clientHeight;
+  camera3.updateProjectionMatrix();
+}
+
+function animate3D() {
+  animId = requestAnimationFrame(animate3D);
+  controls3.update();
+  renderer3.render(scene3, camera3);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 3D SCENE SYNC
+// ══════════════════════════════════════════════════════════════════════
+function sync3D() {
+  wallsGrp.clear();
+  boxesGrp.clear();
+  readersGrp.clear();
+  heatGrp.clear();
+  heatMesh3 = null;
+
+  // Walls
+  for (const w of walls) {
+    const m = MATS[w.mat];
+    const dx = w.x2-w.x1, dz = w.z2-w.z1;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.05) continue;
+    const angle = Math.atan2(dz, dx);
+    const thick = m.thick;
+    const geo = new THREE.BoxGeometry(len, bld.h, thick);
+    const mat3 = new THREE.MeshLambertMaterial({ color: m.col3, transparent: true, opacity: 0.88 });
+    const mesh = new THREE.Mesh(geo, mat3);
+    mesh.position.set((w.x1+w.x2)/2, bld.h/2, (w.z1+w.z2)/2);
+    mesh.rotation.y = -angle;
+    mesh.castShadow = true;
+    wallsGrp.add(mesh);
+  }
+
+  // Boxes / obstacles
+  for (const b of boxes) {
+    const m = MATS[b.mat];
+    const geo = new THREE.BoxGeometry(b.w, b.h, b.d);
+    const mat3 = new THREE.MeshLambertMaterial({ color: m.col3, transparent: true, opacity: 0.85 });
+    const mesh = new THREE.Mesh(geo, mat3);
+    mesh.position.set(b.x + b.w/2, b.h/2, b.z + b.d/2);
+    mesh.castShadow = true;
+    boxesGrp.add(mesh);
+    // Wireframe
+    const wireGeo = new THREE.EdgesGeometry(geo);
+    const wire = new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({ color: 0x1e293b, opacity: 0.4, transparent: true }));
+    wire.position.copy(mesh.position);
+    boxesGrp.add(wire);
+  }
+
+  // Readers
+  for (const r of readers) {
+    const rGroup = new THREE.Group();
+    // Body sphere
+    const sGeo = new THREE.SphereGeometry(0.28, 16, 16);
+    const sMat = new THREE.MeshLambertMaterial({ color: r.auto ? 0xef4444 : 0xf97316, emissive: r.auto ? 0x7f1d1d : 0x7c2d12, emissiveIntensity: 0.3 });
+    const sphere = new THREE.Mesh(sGeo, sMat);
+    sphere.position.set(r.x, bld.h - 0.28, r.z);
+    rGroup.add(sphere);
+
+    // Signal cone (downward)
+    const coneH = bld.h - 0.3;
+    const coneR = coneH * Math.tan(35 * Math.PI/180); // 35° half-angle
+    const cGeo = new THREE.ConeGeometry(coneR, coneH, 16, 1, true);
+    const cMat = new THREE.MeshBasicMaterial({ color: r.auto ? 0xfca5a5 : 0xfed7aa, transparent: true, opacity: 0.09, side: THREE.DoubleSide });
+    const cone = new THREE.Mesh(cGeo, cMat);
+    cone.position.set(r.x, bld.h - 0.3 - coneH/2, r.z);
+    rGroup.add(cone);
+
+    // Stem
+    const stemGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8);
+    const stemMat = new THREE.MeshLambertMaterial({ color: 0x475569 });
+    const stem = new THREE.Mesh(stemGeo, stemMat);
+    stem.position.set(r.x, bld.h - 0.02, r.z);
+    rGroup.add(stem);
+
+    readersGrp.add(rGroup);
+  }
+
+  // Heatmap (if visible)
+  if (showCoverage && coverageMap) updateHeatmap3D();
+}
+
+function updateHeatmap3D() {
+  heatGrp.clear();
+  if (!coverageMap) return;
+
+  const hCanvas = document.createElement('canvas');
+  hCanvas.width = covCols;
+  hCanvas.height = covRows;
+  const hCtx = hCanvas.getContext('2d');
+
+  for (let ci = 0; ci < covCols; ci++) {
+    for (let cj = 0; cj < covRows; cj++) {
+      const s = coverageMap[ci * covRows + cj];
+      hCtx.fillStyle = signalColor(s, 0.75);
+      hCtx.fillRect(ci, cj, 1, 1);
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(hCanvas);
+  const geo = new THREE.PlaneGeometry(bld.w, bld.d);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.78, depthWrite: false });
+  heatMesh3 = new THREE.Mesh(geo, mat);
+  heatMesh3.rotation.x = -Math.PI/2;
+  heatMesh3.position.set(bld.w/2, 0.02, bld.d/2);
+  heatGrp.add(heatMesh3);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// VIEW MANAGEMENT
+// ══════════════════════════════════════════════════════════════════════
+function setView(v) {
+  currentView = v;
+  document.getElementById('btn-view-2d').classList.toggle('active', v === '2d' || v === 'split');
+  document.getElementById('btn-view-3d').classList.toggle('active', v === '3d' || v === 'split');
+  document.getElementById('btn-view-split').classList.toggle('active', v === 'split');
+
+  const p2d = document.getElementById('panel-2d');
+  const p3d = document.getElementById('panel-3d');
+
+  if (v === '2d') {
+    p2d.className = 'col-12'; p3d.className = 'col-12 d-none';
+  } else if (v === '3d') {
+    p2d.className = 'col-12 d-none'; p3d.className = 'col-12';
+  } else {
+    p2d.className = 'col-xl-7'; p3d.className = 'col-xl-5';
+  }
+  setTimeout(() => { resizeCanvas2D(); resize3D(); }, 50);
+}
+
+function zoom2D(dir) {
+  const oldPpm = ppm;
+  const step = ppm >= 40 ? 8 : ppm >= 20 ? 4 : 2;
+  ppm = Math.max(4, Math.min(80, ppm + dir * step));
+  // Zoom centered on building center
+  const cx = c2d.width/2, cy = c2d.height/2;
+  const mx = (cx - oX) / oldPpm, mz = (cy - oY) / oldPpm;
+  oX = cx - mx * ppm;
+  oY = cy - mz * ppm;
+  document.getElementById('zoom-label').textContent = Math.round(ppm/BASE_PPM*100) + '%';
+  draw2D();
+}
+
+function fitView() {
+  const margin = 60;
+  const scaleX = (c2d.width - margin*2) / bld.w;
+  const scaleZ = (c2d.height - margin*2) / bld.d;
+  ppm = Math.min(scaleX, scaleZ, 80);
+  oX = (c2d.width  - bld.w * ppm) / 2;
+  oY = (c2d.height - bld.d * ppm) / 2;
+  document.getElementById('zoom-label').textContent = Math.round(ppm/BASE_PPM*100) + '%';
+  draw2D();
+}
+
+function resizeBuilding() {
+  bld.w = Math.max(5, +document.getElementById('bld-w').value || 40);
+  bld.d = Math.max(5, +document.getElementById('bld-d').value || 25);
+  bld.h = Math.max(2, +document.getElementById('bld-h').value || 5);
+  onDataChanged();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ON DATA CHANGED
+// ══════════════════════════════════════════════════════════════════════
+function onDataChanged() {
+  // Update stats
+  document.getElementById('stat-walls').textContent = walls.length;
+  document.getElementById('stat-obstacles').textContent = boxes.length;
+  document.getElementById('stat-readers').textContent = readers.length;
+
+  if (readers.length > 0) {
+    const cov = computeCoverage();
+    const detail = `${readers.length} olvasóval ~${cov.pct}% lefedettség (${cov.covered}/${cov.total} cella)`;
+    document.getElementById('stat-detail').textContent = detail;
+  } else {
+    document.getElementById('stat-coverage-badge').textContent = 'Lefedettség: –';
+    document.getElementById('stat-coverage-badge').style.background = '#6b7280';
+    document.getElementById('stat-detail').textContent = 'Rajzolja be az épület falait és akadályait, majd kattintson az Auto-elhelyezés gombra.';
+  }
+
+  draw2D();
+  sync3D();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// COVERAGE TOGGLE
+// ══════════════════════════════════════════════════════════════════════
+function toggleCoverage() {
+  showCoverage = !showCoverage;
+  document.getElementById('cov-btn-txt').textContent = showCoverage ? 'Hőtérkép ki' : 'Hőtérkép be';
+  if (showCoverage && readers.length > 0) computeCoverage();
+  draw2D();
+  sync3D();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════════════════════════════
+function exportData() {
+  const data = { building: bld, walls, boxes, readers,
+    stats: { readers: readers.length, walls: walls.length, boxes: boxes.length } };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'rtls_building_plan.json';
+  a.click();
+}
+
+function sendToPlanner() {
+  const cov = readers.length > 0 ? computeCoverage() : { pct: 0 };
+  const data = {
+    readers: readers.length,
+    walls: walls.length,
+    boxes: boxes.length,
+    coverage_pct: cov.pct,
+    building_w: bld.w,
+    building_d: bld.d,
+    building_h: bld.h,
+    total_area: bld.w * bld.d,
+  };
+  const params = new URLSearchParams(data);
+  window.location.href = '/rtls-planner?' + params.toString();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════════
+initMaterialPicker();
+initCanvas2D();
+init3D();
+setTool('wall');
+fitView();
+
+// Default: draw example building
+function seedExample() {
+  // Outer walls
+  addWall(0,0, bld.w,0, 'concrete');
+  addWall(bld.w,0, bld.w,bld.d, 'concrete');
+  addWall(bld.w,bld.d, 0,bld.d, 'concrete');
+  addWall(0,bld.d, 0,0, 'concrete');
+  // Inner divider wall
+  addWall(15,0, 15,15, 'concrete');
+  // Metal shelving example
+  addBox(3, 3, 4, 0.6, 2.2, 'metal_shelf');
+  addBox(3, 5, 4, 0.6, 2.2, 'metal_shelf');
+  addBox(3, 7, 4, 0.6, 2.2, 'metal_shelf');
+  onDataChanged();
+}
+
+setTimeout(() => {
+  seedExample();
+  showToast('Példa épület betöltve. Rajzoljon tovább, vagy kattintson az Auto-elhelyezés gombra!', 'info');
+}, 300);
+</script>
+
+<style>
+/* Override content padding for full-height canvas */
+.main-wrap .content { padding-bottom: 0; }
+</style>
+{% endblock %}

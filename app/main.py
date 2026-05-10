@@ -152,6 +152,10 @@ async def page_hall_map(request: Request, hall_id: int):
 async def page_rtls_planner(request: Request):
     return templates.TemplateResponse("rtls_planner.html", {"request": request, "page": "rtls_planner"})
 
+@app.get("/building-editor")
+async def page_building_editor(request: Request):
+    return templates.TemplateResponse("building_editor.html", {"request": request, "page": "building_editor"})
+
 
 if __name__ == "__main__":
     import uvicorn
