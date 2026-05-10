@@ -1,0 +1,1301 @@
+{% extends "base.html" %}
+{% block title %}RTLS Rendszer Tervező{% endblock %}
+{% block page_title %}RTLS Rendszer Tervező – Saját nyomkövető rendszer varázsló{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-sm btn-outline-secondary me-1" onclick="resetWizard()">
+  <i class="bi bi-arrow-counterclockwise me-1"></i>Újrakezdés
+</button>
+<button class="btn btn-sm btn-success d-none" id="btn-print" onclick="window.print()">
+  <i class="bi bi-printer me-1"></i>Terv nyomtatása
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ══ Progress bar ════════════════════════════════════════════════════════ -->
+<div class="mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-1">
+    <span class="small fw-semibold text-muted" id="step-label">1 / 6 lépés</span>
+    <span class="small text-muted" id="step-name">Bevezetés</span>
+  </div>
+  <div class="progress" style="height:8px;border-radius:8px">
+    <div class="progress-bar bg-primary" id="wizard-progress" style="width:16.7%;transition:width .4s"></div>
+  </div>
+  <!-- Step dots -->
+  <div class="d-flex justify-content-between mt-2" style="font-size:.72rem">
+    <span id="dot-0" class="step-dot active">① Üdvözlet</span>
+    <span id="dot-1" class="step-dot">② Mit követ?</span>
+    <span id="dot-2" class="step-dot">③ Épület</span>
+    <span id="dot-3" class="step-dot">④ Akadályok</span>
+    <span id="dot-4" class="step-dot">⑤ Infrastruktúra</span>
+    <span id="dot-5" class="step-dot">⑥ Eredmény</span>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- ══ WIZARD MAIN ══════════════════════════════════════════════════════ -->
+  <div class="col-xl-8">
+
+    <!-- ────────────── STEP 0: ÜDVÖZLET ────────────── -->
+    <div class="wizard-step" id="step-0">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4 text-center">
+          <div style="font-size:4rem" class="mb-3">📡</div>
+          <h2 class="fw-black mb-2">RTLS Rendszer Tervező</h2>
+          <p class="lead text-muted mb-4">
+            Ez a varázsló segít kiszámítani, hogy az Ön gyárához / raktárához<br>
+            <strong>pontosan milyen eszközökre van szükség</strong> egy valós idejű nyomkövető rendszer kiépítéséhez.
+          </p>
+          <div class="row g-3 mb-4 text-start">
+            <div class="col-md-4">
+              <div class="p-3 rounded-3 h-100" style="background:#eff6ff;border:1px solid #bfdbfe">
+                <div class="fs-4 mb-2">🧮</div>
+                <div class="fw-bold mb-1">Automatikus számítás</div>
+                <div class="text-muted small">Megadja az épület méretét és az akadályokat → a rendszer kiszámolja, hány olvasóra van szükség.</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="p-3 rounded-3 h-100" style="background:#f0fdf4;border:1px solid #bbf7d0">
+                <div class="fs-4 mb-2">⚠️</div>
+                <div class="fw-bold mb-1">Kockázatelemzés</div>
+                <div class="text-muted small">A varázsló automatikusan kiszűri a lehetséges buktatókat és megmondja, hogyan kerülje el őket.</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="p-3 rounded-3 h-100" style="background:#fefce8;border:1px solid #fde68a">
+                <div class="fs-4 mb-2">📋</div>
+                <div class="fw-bold mb-1">Teljes eszközlista</div>
+                <div class="text-muted small">Pontos bevásárlólista árakkal, szerelési útmutatóval és megvalósítási ütemtervvel.</div>
+              </div>
+            </div>
+          </div>
+          <div class="alert alert-info text-start mb-4">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Kb. 5 perc alatt elkészül a terve.</strong> Nem kell technikai tudás – minden lépésnél megmagyarázzuk, mit kell megadni és miért.
+          </div>
+          <button class="btn btn-primary btn-lg px-5" onclick="goStep(1)">
+            <i class="bi bi-arrow-right-circle me-2"></i>Kezdjük el!
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────────────── STEP 1: MIT KÖVET? ────────────── -->
+    <div class="wizard-step d-none" id="step-1">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <h4 class="fw-bold mb-1"><span class="badge bg-primary me-2">1</span>Mit szeretne nyomon követni?</h4>
+          <p class="text-muted mb-4">Kattintson arra, ami leginkább illik az Ön helyzetéhez. Több is választható.</p>
+          <div class="row g-3 mb-4" id="track-type-cards">
+            <div class="col-md-4">
+              <div class="track-card card border-2 h-100" data-value="carts" onclick="toggleTrackType(this)">
+                <div class="card-body text-center py-4">
+                  <div class="fs-1 mb-2">🛒</div>
+                  <div class="fw-bold">Komissiózó kocsik</div>
+                  <div class="text-muted small mt-1">Szereldei, raktári kocsik pozíciója</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="track-card card border-2 h-100" data-value="pallets" onclick="toggleTrackType(this)">
+                <div class="card-body text-center py-4">
+                  <div class="fs-1 mb-2">📦</div>
+                  <div class="fw-bold">Raklapok / áru</div>
+                  <div class="text-muted small mt-1">Raktári készlet, be/kimenet</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="track-card card border-2 h-100" data-value="forklifts" onclick="toggleTrackType(this)">
+                <div class="card-body text-center py-4">
+                  <div class="fs-1 mb-2">🚜</div>
+                  <div class="fw-bold">Targoncák</div>
+                  <div class="text-muted small mt-1">Targonca-flotta nyomon követése</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="track-card card border-2 h-100" data-value="assets" onclick="toggleTrackType(this)">
+                <div class="card-body text-center py-4">
+                  <div class="fs-1 mb-2">🔧</div>
+                  <div class="fw-bold">Eszközök / gépek</div>
+                  <div class="text-muted small mt-1">Szerszámok, berendezések</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="track-card card border-2 h-100" data-value="people" onclick="toggleTrackType(this)">
+                <div class="card-body text-center py-4">
+                  <div class="fs-1 mb-2">👷</div>
+                  <div class="fw-bold">Személyek</div>
+                  <div class="text-muted small mt-1">Dolgozók, látogatók tartózkodási helye</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="track-card card border-2 h-100" data-value="mixed" onclick="toggleTrackType(this)">
+                <div class="card-body text-center py-4">
+                  <div class="fs-1 mb-2">🗂️</div>
+                  <div class="fw-bold">Vegyes / több dolog</div>
+                  <div class="text-muted small mt-1">Több típus kombinálva</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Hány darab eszközt / tárgyat szeretne nyomon követni?</label>
+            <div class="d-flex align-items-center gap-3">
+              <input type="range" class="form-range flex-grow-1" id="num-items" min="1" max="500" value="20"
+                     oninput="document.getElementById('num-items-val').textContent=this.value;recalc()">
+              <span class="badge bg-primary fs-6" id="num-items-val" style="min-width:55px">20</span>
+            </div>
+            <div class="d-flex justify-content-between text-muted" style="font-size:.72rem">
+              <span>1 db</span><span>100 db</span><span>250 db</span><span>500 db</span>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Milyen pontossággal kell tudni az eszköz helyzetét?</label>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <div class="prec-card card border-2 selected" data-value="zone" onclick="selectPrecision(this)">
+                  <div class="card-body py-3 px-3">
+                    <div class="fw-bold mb-1">🗺️ Zóna szintű <span class="badge bg-success ms-1">Ajánlott</span></div>
+                    <div class="text-muted small">Tudjuk, hogy a kocsi melyik <strong>területen</strong> van (pl. szerelde, folyosó, raktár).<br>
+                    Olcsóbb, kevesebb olvasó kell.</div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="prec-card card border-2" data-value="precise" onclick="selectPrecision(this)">
+                  <div class="card-body py-3 px-3">
+                    <div class="fw-bold mb-1">📍 Pontos pozíció</div>
+                    <div class="text-muted small">Tudjuk a <strong>pontos X,Y koordinátát</strong> (1-3m pontossággal).<br>
+                    Drágább, több olvasó kell, de precízebb.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between">
+            <button class="btn btn-outline-secondary" onclick="goStep(0)"><i class="bi bi-arrow-left me-1"></i>Vissza</button>
+            <button class="btn btn-primary" onclick="goStep(2)">Tovább <i class="bi bi-arrow-right ms-1"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────────────── STEP 2: AZ ÉPÜLET ────────────── -->
+    <div class="wizard-step d-none" id="step-2">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <h4 class="fw-bold mb-1"><span class="badge bg-primary me-2">2</span>Az épület adatai</h4>
+          <p class="text-muted mb-4">Az épület mérete határozza meg, hány RFID olvasóra lesz szükség. Ha nem tudja pontosan, adjon hozzávetőleges értéket.</p>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Az épület / terület alapterülete <i class="bi bi-info-circle text-muted" title="A teljes nyomon követendő terület négyzetmétere. Ha több épületet akar lefedni, adja össze."></i></label>
+              <div class="input-group">
+                <input type="number" class="form-control form-control-lg" id="total-area" value="1000" min="50" max="50000"
+                       oninput="recalc()" placeholder="pl. 1000">
+                <span class="input-group-text">m²</span>
+              </div>
+              <div class="form-text">Nem tudja pontosan? <a href="#" onclick="guessArea()">Segíts kiszámolni →</a></div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Belmagasság (mennyezet magassága)</label>
+              <div class="input-group">
+                <input type="number" class="form-control form-control-lg" id="ceiling-height" value="5" min="2" max="20" step="0.5"
+                       oninput="recalc()">
+                <span class="input-group-text">m</span>
+              </div>
+              <div class="form-text">Tipikus értékek: iroda 2.7m, csarnok 4-8m, magtár 8-12m</div>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Hány különböző zónát / területet kell megkülönböztetni? <i class="bi bi-info-circle text-muted" title="Pl. Hátralékos, Szerelde 1, Szerelde 2, Folyosó, Kész = 5 zóna"></i></label>
+              <div class="d-flex align-items-center gap-3">
+                <input type="range" class="form-range flex-grow-1" id="num-zones" min="1" max="20" value="5"
+                       oninput="document.getElementById('num-zones-val').textContent=this.value;recalc()">
+                <span class="badge bg-primary fs-6" id="num-zones-val" style="min-width:45px">5</span>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Hány bejárat / kijárat van amit figyelni kell? <i class="bi bi-info-circle text-muted" title="Kapuk, ajtók ahol pontosan érzékelni kell az átmenést. Minden kapu = 2 olvasó (mindkét oldal)."></i></label>
+              <div class="d-flex align-items-center gap-3">
+                <input type="range" class="form-range flex-grow-1" id="num-gates" min="0" max="10" value="2"
+                       oninput="document.getElementById('num-gates-val').textContent=this.value;recalc()">
+                <span class="badge bg-primary fs-6" id="num-gates-val" style="min-width:45px">2</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Hány emeletes az épület?</label>
+              <select class="form-select" id="num-floors" onchange="recalc()">
+                <option value="1" selected>1 szint (földszint)</option>
+                <option value="2">2 szint</option>
+                <option value="3">3 szint</option>
+                <option value="0">Más (galériás / több szint)</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Az épület kora / állapota</label>
+              <select class="form-select" id="building-age" onchange="recalc()">
+                <option value="new">Új épület (2010 után)</option>
+                <option value="medium" selected>Közepes (1990-2010)</option>
+                <option value="old">Régi épület (1990 előtt)</option>
+              </select>
+              <div class="form-text">Régebbi épületek vastagabb falakkal, több interferenciával rendelkeznek.</div>
+            </div>
+          </div>
+
+          <!-- Area helper modal -->
+          <div class="collapse mb-3" id="area-helper">
+            <div class="card card-body bg-light">
+              <div class="fw-semibold mb-2">Segítség az alapterület kiszámításához</div>
+              <div class="row g-2">
+                <div class="col-6"><label class="small">Épület hossza (m)</label>
+                  <input type="number" class="form-control form-control-sm" id="ah-len" placeholder="40" oninput="calcArea()"></div>
+                <div class="col-6"><label class="small">Épület szélessége (m)</label>
+                  <input type="number" class="form-control form-control-sm" id="ah-wid" placeholder="25" oninput="calcArea()"></div>
+              </div>
+              <div class="mt-2 text-success" id="ah-result"></div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <button class="btn btn-outline-secondary" onclick="goStep(1)"><i class="bi bi-arrow-left me-1"></i>Vissza</button>
+            <button class="btn btn-primary" onclick="goStep(3)">Tovább <i class="bi bi-arrow-right ms-1"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────────────── STEP 3: AKADÁLYOK ────────────── -->
+    <div class="wizard-step d-none" id="step-3">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <h4 class="fw-bold mb-1"><span class="badge bg-primary me-2">3</span>Akadályok és környezet</h4>
+          <p class="text-muted mb-3">Az RFID rádióhullámokat bizonyos anyagok akadályozzák. Jelölje be, ami jellemző az Ön épületére. Ez határozza meg, hogy hány olvasóra van szükség.</p>
+
+          <div class="alert alert-warning py-2 mb-3">
+            <i class="bi bi-lightbulb me-2"></i><strong>Fontos:</strong> Ha nem biztos valamiben, inkább jelölje be – jobb egy konzervatív becslés mint egy alulméretezett rendszer.
+          </div>
+
+          <div class="row g-2 mb-3" id="obstacle-grid">
+            <!-- rendered by JS -->
+          </div>
+
+          <hr class="my-3">
+          <h6 class="fw-bold mb-3">🌡️ Üzemeltetési körülmények</h6>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Hőmérséklet télen (min.)</label>
+              <div class="input-group input-group-sm">
+                <input type="number" class="form-control" id="temp-min" value="10" min="-30" max="40" oninput="recalc()">
+                <span class="input-group-text">°C</span>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Hőmérséklet nyáron (max.)</label>
+              <div class="input-group input-group-sm">
+                <input type="number" class="form-control" id="temp-max" value="35" min="10" max="70" oninput="recalc()">
+                <span class="input-group-text">°C</span>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">Páratartalom</label>
+              <select class="form-select form-select-sm" id="humidity" onchange="recalc()">
+                <option value="normal">Normál (40-60%)</option>
+                <option value="high">Magas (60-80%)</option>
+                <option value="extreme">Extrém (&gt;80%, kondenzáció)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="has-dust" onchange="recalc()">
+              <label class="form-check-label">🌫️ <strong>Poros környezet</strong> – ipari por, faforgács, fémreszelék</label>
+            </div>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" id="has-vibration" onchange="recalc()">
+              <label class="form-check-label">📳 <strong>Erős rezgés</strong> – nehézgépek, présgépek közelében</label>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between mt-4">
+            <button class="btn btn-outline-secondary" onclick="goStep(2)"><i class="bi bi-arrow-left me-1"></i>Vissza</button>
+            <button class="btn btn-primary" onclick="goStep(4)">Tovább <i class="bi bi-arrow-right ms-1"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────────────── STEP 4: INFRASTRUKTÚRA ────────────── -->
+    <div class="wizard-step d-none" id="step-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <h4 class="fw-bold mb-1"><span class="badge bg-primary me-2">4</span>Meglévő infrastruktúra</h4>
+          <p class="text-muted mb-4">Ez segít meghatározni, mit kell beszerezni és mi áll már rendelkezésre. Minden kérdésre van magyarázat.</p>
+
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="infra-question p-3 rounded-3 border mb-2" id="q-network">
+                <div class="d-flex align-items-start gap-3">
+                  <div class="fs-3">🌐</div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold">Van az épületben Ethernet hálózat (RJ45 dugók a falban)?</div>
+                    <div class="text-muted small mb-2">Az RFID olvasók Ethernet kábelen kommunikálnak. Ha nincs hálózat, azt először ki kell építeni – ez az egyik legnagyobb projekt-kockázat.</div>
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button" class="btn btn-outline-success infra-btn" data-field="has_network" data-val="yes" onclick="setInfra(this)">✅ Igen, van hálózat</button>
+                      <button type="button" class="btn btn-outline-warning infra-btn" data-field="has_network" data-val="partial" onclick="setInfra(this)">🔶 Részben van</button>
+                      <button type="button" class="btn btn-outline-danger infra-btn" data-field="has_network" data-val="no" onclick="setInfra(this)">❌ Nincs hálózat</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="infra-question p-3 rounded-3 border mb-2" id="q-poe">
+                <div class="d-flex align-items-start gap-3">
+                  <div class="fs-3">⚡</div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold">Van PoE switch? (Power over Ethernet – kábelen át táplálja az olvasókat)</div>
+                    <div class="text-muted small mb-2">A PoE switch egyszerre biztosítja az adatátvitelt ÉS az áramot a kábelen. Nélküle minden olvasóhoz külön tápkábel kell.</div>
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button" class="btn btn-outline-success infra-btn" data-field="has_poe" data-val="yes" onclick="setInfra(this)">✅ Igen, van PoE switch</button>
+                      <button type="button" class="btn btn-outline-danger infra-btn" data-field="has_poe" data-val="no" onclick="setInfra(this)">❌ Nincs PoE switch</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="infra-question p-3 rounded-3 border mb-2">
+                <div class="d-flex align-items-start gap-3">
+                  <div class="fs-3">🖥️</div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold">Van szerver vagy mini PC, ahol a szoftver futhat?</div>
+                    <div class="text-muted small mb-2">A nyomkövető szoftvernek kell egy számítógép, ami folyamatosan fut. Lehet egy kis mini PC is (Intel NUC stb., 8GB RAM, 256GB SSD).</div>
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button" class="btn btn-outline-success infra-btn" data-field="has_server" data-val="yes" onclick="setInfra(this)">✅ Igen, van szerver/PC</button>
+                      <button type="button" class="btn btn-outline-danger infra-btn" data-field="has_server" data-val="no" onclick="setInfra(this)">❌ Nincs szerver</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="infra-question p-3 rounded-3 border mb-2">
+                <div class="d-flex align-items-start gap-3">
+                  <div class="fs-3">👨‍💻</div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold">Van IT-s kolléga vagy külső IT-cég, aki segíthet a beállításban?</div>
+                    <div class="text-muted small mb-2">A szoftver telepítéséhez alapszintű IT-ismeretek szükségesek. Ha nincs IT-s, tervezzük be a külső IT-támogatás költségét is.</div>
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button" class="btn btn-outline-success infra-btn" data-field="has_it" data-val="yes" onclick="setInfra(this)">✅ Igen, van IT-s</button>
+                      <button type="button" class="btn btn-outline-warning infra-btn" data-field="has_it" data-val="basic" onclick="setInfra(this)">🔶 Alapszintű IT-tudás</button>
+                      <button type="button" class="btn btn-outline-danger infra-btn" data-field="has_it" data-val="no" onclick="setInfra(this)">❌ Nincs IT-s</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="infra-question p-3 rounded-3 border mb-2">
+                <div class="d-flex align-items-start gap-3">
+                  <div class="fs-3">🏢</div>
+                  <div class="flex-grow-1">
+                    <div class="fw-bold">Az épület saját tulajdon, vagy bérelt?</div>
+                    <div class="text-muted small mb-2">Bérelt ingatlanban esetleg szükség lehet a bérbeadó engedélyére a szerelési munkához (fúrás, kábelfektetés).</div>
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button" class="btn btn-outline-success infra-btn" data-field="building_own" data-val="own" onclick="setInfra(this)">✅ Saját tulajdon</button>
+                      <button type="button" class="btn btn-outline-warning infra-btn" data-field="building_own" data-val="rented" onclick="setInfra(this)">🔶 Bérelt ingatlan</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="p-3 rounded-3 border">
+                <div class="fw-bold mb-2">💰 Tervezett büdzsé</div>
+                <div class="d-flex align-items-center gap-3">
+                  <input type="range" class="form-range flex-grow-1" id="budget" min="200000" max="5000000" step="50000" value="1000000"
+                         oninput="document.getElementById('budget-val').textContent=formatHUF(+this.value);recalc()">
+                  <span class="badge bg-success fs-6 text-nowrap" id="budget-val">1 000 000 Ft</span>
+                </div>
+                <div class="d-flex justify-content-between text-muted" style="font-size:.72rem">
+                  <span>200 eFt</span><span>1 MFt</span><span>2.5 MFt</span><span>5 MFt</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between mt-4">
+            <button class="btn btn-outline-secondary" onclick="goStep(3)"><i class="bi bi-arrow-left me-1"></i>Vissza</button>
+            <button class="btn btn-success fw-bold" onclick="goStep(5)"><i class="bi bi-calculator me-2"></i>Eredmény kiszámítása!</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ────────────── STEP 5: EREDMÉNY ────────────── -->
+    <div class="wizard-step d-none" id="step-5">
+      <div id="results-container"></div>
+      <div class="d-flex justify-content-between mt-3">
+        <button class="btn btn-outline-secondary" onclick="goStep(4)"><i class="bi bi-arrow-left me-1"></i>Módosítás</button>
+        <button class="btn btn-success fw-bold" onclick="window.print()"><i class="bi bi-printer me-2"></i>Terv nyomtatása / Mentés PDF-be</button>
+      </div>
+    </div>
+
+  </div><!-- /col-xl-8 -->
+
+  <!-- ══ LIVE SUMMARY PANEL ══════════════════════════════════════════════ -->
+  <div class="col-xl-4">
+    <div class="card border-0 shadow-sm" style="position:sticky;top:80px">
+      <div class="card-header bg-transparent border-0 py-2">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-calculator me-2 text-primary"></i>Élő becslés</h6>
+        <div class="text-muted" style="font-size:.72rem">Automatikusan frissül kitöltés közben</div>
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <div class="text-center p-2 rounded-3" style="background:#eff6ff">
+              <div class="fw-black fs-4 text-primary" id="sum-readers">–</div>
+              <div class="text-muted small">RFID olvasó</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="text-center p-2 rounded-3" style="background:#f0fdf4">
+              <div class="fw-black fs-4 text-success" id="sum-tags">–</div>
+              <div class="text-muted small">RFID tag</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="text-center p-2 rounded-3" style="background:#fefce8">
+              <div class="fw-black fs-4 text-warning" id="sum-cable">–</div>
+              <div class="text-muted small">Kábel (m)</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="text-center p-2 rounded-3" style="background:#fef2f2">
+              <div class="fw-black fs-4" id="sum-coverage-pct" style="color:#f97316">–</div>
+              <div class="text-muted small">Lefedettség</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-top pt-3 mb-3">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted small">Becsült eszközköltség:</span>
+            <span class="fw-semibold" id="sum-equip-cost">–</span>
+          </div>
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted small">Becsült szerelési díj:</span>
+            <span class="fw-semibold" id="sum-labor-cost">–</span>
+          </div>
+          <div class="d-flex justify-content-between fw-bold">
+            <span>Teljes becsült költség:</span>
+            <span class="text-primary fs-6" id="sum-total-cost">–</span>
+          </div>
+        </div>
+
+        <!-- Budget fit indicator -->
+        <div id="budget-indicator" class="mb-3 d-none">
+          <div class="d-flex justify-content-between small mb-1">
+            <span>Büdzsé illeszkedés:</span>
+            <span id="budget-fit-label"></span>
+          </div>
+          <div class="progress" style="height:10px">
+            <div class="progress-bar" id="budget-fit-bar" style="width:0%;transition:width .5s"></div>
+          </div>
+        </div>
+
+        <!-- Risk indicator -->
+        <div class="border-top pt-2">
+          <div class="fw-semibold small mb-2">Kockázati szint:</div>
+          <div id="sum-risk-badge" class="text-center">
+            <span class="badge bg-secondary px-4 py-2">Kitöltés folyamatban...</span>
+          </div>
+        </div>
+
+        <div class="mt-3 border-top pt-3">
+          <div class="text-muted small mb-1">Becsült megvalósítási idő:</div>
+          <div class="fw-bold" id="sum-timeline">–</div>
+        </div>
+
+        <!-- Coverage warning -->
+        <div class="alert alert-warning py-2 mt-3 d-none small" id="coverage-warn">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          <span id="coverage-warn-text"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /row -->
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ══ ÁLLAPOT ══════════════════════════════════════════════════════════════════
+const state = {
+  trackTypes: [],
+  numItems: 20,
+  precision: 'zone',
+  totalArea: 1000,
+  ceilingHeight: 5,
+  numZones: 5,
+  numGates: 2,
+  numFloors: 1,
+  buildingAge: 'medium',
+  obstacles: [],
+  humidity: 'normal',
+  hasDust: false,
+  hasVibration: false,
+  tempMin: 10,
+  tempMax: 35,
+  infra: { has_network: null, has_poe: null, has_server: null, has_it: null, building_own: null },
+  budget: 1000000,
+};
+
+// ══ AKADÁLYOK KATALÓGUSA ════════════════════════════════════════════════════
+const OBSTACLES = [
+  { id:'concrete_walls',   icon:'🏗️', name:'Beton falak / betonpanelek', desc:'Vastag beton 20-35%-kal gyengíti az RFID jelet.', penalty:0.28 },
+  { id:'steel_structure',  icon:'🔩', name:'Acél / fém tartószerkezet',   desc:'Fém vázszerkezet visszaveri a rádióhullámokat. Holttereket okoz.', penalty:0.42 },
+  { id:'metal_shelving',   icon:'📚', name:'Fém állványzat, polcrendszer', desc:'Teli fém állványsorok komoly árnyékolást okoznak.', penalty:0.32 },
+  { id:'heavy_machinery',  icon:'⚙️', name:'Nehéz gépek, présgépek',      desc:'Nagy fémtömegű gépek közelében gyengébb a jel.', penalty:0.22 },
+  { id:'mesh_fence',       icon:'🔗', name:'Fém kerítés / drótháló',      desc:'Fémhálók részben átbocsátják a jelet, de csillapítják.', penalty:0.18 },
+  { id:'wifi_2ghz',        icon:'📶', name:'Erős 2.4 GHz WiFi hálózat',   desc:'Egyes UHF RFID sávok közel vannak a WiFi frekvenciához.', penalty:0.10 },
+  { id:'conveyor',         icon:'🏭', name:'Szalagok, futószalagok',      desc:'Mozgó fém elemek dinamikus interferenciát okoznak.', penalty:0.15 },
+  { id:'forklift_dense',   icon:'🚜', name:'Sűrű targoncaforgalom',       desc:'Mozgó fémes tárgyak időszakos jel-blokkolást okoznak.', penalty:0.08 },
+];
+
+// ══ SZÁMÍTÁS MOTOR ══════════════════════════════════════════════════════════
+const PRICES = {
+  reader: 235000,     // UHF RFID olvasó (ATR7000 kategória)
+  tag: 780,           // Passzív UHF RFID tag
+  poe8: 42000,        // PoE switch 8 port
+  poe16: 76000,       // PoE switch 16 port
+  cat6_100m: 16000,   // Cat6 kábel 100m tekercs
+  server: 185000,     // Mini PC szerver
+  ups: 72000,         // UPS szünetmentes tápegység
+  cable_duct_50m: 11000, // Kábelcsatorna 50m
+  rj45_100: 3800,     // RJ45 csatlakozó 100db
+  mount_per_reader: 4500, // Szerelési konzol olvasónként
+  labor_per_reader: 28000, // Szerelési munka olvasónként
+  labor_network_base: 85000, // Hálózat kiépítése alap
+  labor_it_setup: 60000,    // IT beállítás, szoftver
+  labor_training: 35000,    // Betanítás
+};
+
+function calculate() {
+  const area = +document.getElementById('total-area').value || 1000;
+  const ceiling = +document.getElementById('ceiling-height').value || 5;
+  const zones = +document.getElementById('num-zones').value || 5;
+  const gates = +document.getElementById('num-gates').value || 2;
+  const floors = +document.getElementById('num-floors').value || 1;
+  const buildingAge = document.getElementById('building-age').value;
+  const numItems = +document.getElementById('num-items').value || 20;
+  const precision = state.precision;
+  const budget = +document.getElementById('budget').value || 1000000;
+
+  // 1. Alap lefedettség olvasónként
+  let baseCoverage = precision === 'precise' ? 220 : 720;
+
+  // Épület kora módosítás
+  if (buildingAge === 'old') baseCoverage *= 0.85;
+  if (buildingAge === 'new') baseCoverage *= 1.05;
+
+  // Emelet módosítás (mindegyik szintnek külön kell)
+  const effectiveArea = area * Math.max(1, floors);
+
+  // 2. Akadályok
+  const selectedObstacles = OBSTACLES.filter(o => state.obstacles.includes(o.id));
+  let coverageMult = 1.0;
+  for (const obs of selectedObstacles) {
+    coverageMult *= (1 - obs.penalty);
+  }
+  // Páratartalom
+  const hum = document.getElementById('humidity').value;
+  if (hum === 'high') coverageMult *= 0.88;
+  if (hum === 'extreme') coverageMult *= 0.78;
+  // Por
+  if (document.getElementById('has-dust').checked) coverageMult *= 0.92;
+  // Belmagasság (>6m esetén mennyezeti szerelés nem optimális)
+  if (ceiling > 6) coverageMult *= 0.90;
+  if (ceiling > 10) coverageMult *= 0.82;
+
+  const adjustedCoverage = Math.round(baseCoverage * coverageMult);
+  const coveragePct = Math.round(coverageMult * 100);
+
+  // 3. Olvasók száma
+  const readersForArea = Math.ceil(effectiveArea / adjustedCoverage);
+  const readersForGates = gates * 2;
+  const readersForZones = zones; // minden zónában legalább 1
+  const baseReaders = Math.max(readersForArea, readersForGates, readersForZones);
+  const readers = Math.ceil(baseReaders * 1.22); // +22% redundancia
+
+  // 4. Tagek
+  const tagsMain = numItems;
+  const tagsSpare = Math.max(3, Math.ceil(numItems * 0.15));
+  const totalTags = tagsMain + tagsSpare;
+
+  // 5. Kábel
+  const avgRun = Math.sqrt(area / readers) * 1.85 + 28; // m, olvasónként
+  const totalCableM = Math.ceil(avgRun * readers * 1.12); // +12% tartalék
+  const cableRolls = Math.ceil(totalCableM / 100) + 1;
+
+  // 6. Switch
+  const poe8count = Math.ceil(readers / 8);
+  const poe16count = Math.ceil(readers / 16);
+  const useLarge = readers > 8 && (poe16count * PRICES.poe16 < poe8count * PRICES.poe8);
+  const switches = useLarge ? poe16count : poe8count;
+  const switchType = useLarge ? '16 portos PoE' : '8 portos PoE';
+  const switchCost = useLarge ? poe16count * PRICES.poe16 : poe8count * PRICES.poe8;
+
+  // 7. Szerver
+  const needsServer = state.infra.has_server !== 'yes';
+  // 8. UPS (ha <2020 épület vagy fontos folyamatos üzem)
+  const needsUPS = true; // always recommend
+  // 9. Kábelcsatorna
+  const ductCount = Math.ceil(totalCableM / 50);
+
+  // ══ Eszközköltség ══
+  let equipCost = 0;
+  equipCost += readers * PRICES.reader;
+  equipCost += totalTags * PRICES.tag;
+  equipCost += switchCost;
+  equipCost += cableRolls * PRICES.cat6_100m;
+  if (needsServer) equipCost += PRICES.server;
+  if (needsUPS) equipCost += PRICES.ups;
+  equipCost += ductCount * PRICES.cable_duct_50m;
+  equipCost += Math.ceil(readers / 10) * PRICES.rj45_100;
+  equipCost += readers * PRICES.mount_per_reader;
+
+  // ══ Munkaköltség ══
+  let laborCost = readers * PRICES.labor_per_reader;
+  if (state.infra.has_network !== 'yes') laborCost += PRICES.labor_network_base;
+  laborCost += PRICES.labor_it_setup;
+  laborCost += PRICES.labor_training;
+  if (state.infra.has_it === 'no') laborCost += 45000; // külső IT
+
+  const totalCost = equipCost + laborCost;
+
+  // ══ Kockázatok ══
+  const risks = [];
+  if (state.infra.has_network === 'no') {
+    risks.push({ sev:'high', icon:'🌐', title:'Hálózat hiányzik',
+      desc:'Ethernet hálózat nélkül a projekt nem tud elindulni. Ez a leghosszabb előkészítési lépés.',
+      fix:'Először tervezze meg és építse ki a hálózatot. Számítson +2-3 hétre és +50-150 eFt extra költségre.' });
+  }
+  if (state.infra.has_poe === 'no') {
+    risks.push({ sev:'high', icon:'⚡', title:'PoE switch hiányzik',
+      desc:'PoE switch nélkül minden RFID olvasóhoz külön tápkábel kell, ami sokkal bonyolultabb és drágább.',
+      fix:'Tervezze be a PoE switch(ek) költségét. Ez a számításban már benne van.' });
+  }
+  if (selectedObstacles.some(o => ['steel_structure','metal_shelving'].includes(o.id))) {
+    risks.push({ sev:'high', icon:'🔩', title:'Fémszerkezet interferencia veszélye',
+      desc:`A fém elemek a jel ${Math.round((1-coverageMult)*100)}%-át elnyelik. Holtterek keletkezhetnek.`,
+      fix:'Telepítés előtt végezzen helyszíni jelmérést (site survey). Tervezzen be extra olvasókat a problémás pontokhoz.' });
+  }
+  if (coveragePct < 50) {
+    risks.push({ sev:'high', icon:'📉', title:'Erős jel-csillapítás',
+      desc:`Az akadályok miatt a lefedettség ${coveragePct}%-ra csökkent az ideális 100%-hoz képest. Sok extra olvasó kell.`,
+      fix:'Fontolja meg a pontos RTLS helyett egy egyszerűbb, kapu-alapú megoldást. Vagy csökkentse az akadályok hatását (pl. antenna elhelyezés optimalizálás).' });
+  }
+  if (ceiling > 7) {
+    risks.push({ sev:'medium', icon:'📏', title:'Nagy belmagasság',
+      desc:`${ceiling}m belmagasság esetén a mennyezeti szerelés speciális állványt (emelőkosarat) igényel.`,
+      fix:'Béreljen emelőkosarat a szereléshez. Vizsgálja meg az oldalfali szerelés lehetőségét, ami olcsóbb és könnyebb.' });
+  }
+  if (state.infra.has_it === 'no') {
+    risks.push({ sev:'medium', icon:'👨‍💻', title:'IT-s hiánya',
+      desc:'Nincs IT-s, aki az üzemeltetésben segítene. Ha bármi megakad, nem tudnak önállóan javítani.',
+      fix:'Jelöljön ki egy "rendszergazdát" a meglévő kollégák közül és biztosítson számára alapszintű IT-képzést. Külső IT-cég szerződése is megoldás.' });
+  }
+  if (state.infra.building_own === 'rented') {
+    risks.push({ sev:'medium', icon:'🏢', title:'Bérelt ingatlan',
+      desc:'Bérelt épületben a bérbeadó engedélye szükséges lehet a fúráshoz, kábelfektetéshez.',
+      fix:'Kérjen írásos engedélyt a bérbeadótól MIELŐTT megrendeli az eszközöket. Ez akár hetekbe is telhet.' });
+  }
+  if (numItems > 150) {
+    risks.push({ sev:'low', icon:'🏷️', title:'Nagy tag-szám',
+      desc:`${numItems} tag esetén az olvasó kapacitást ellenőrizni kell (tipikus limit: 100-200 tag/sec olvasónként).`,
+      fix:'Válasszon nagyteljesítményű RFID olvasót, és ellenőrizze a szoftver kapacitását is.' });
+  }
+  if (totalCost > budget * 1.15) {
+    risks.push({ sev:'medium', icon:'💰', title:'Büdzsé túllépés veszélye',
+      desc:`A becsült költség (${formatHUF(totalCost)}) ~${Math.round((totalCost/budget-1)*100)}%-kal meghaladja a tervezett büdzsét.`,
+      fix:'Fontolja meg a fázisolt megvalósítást: először a legfontosabb zónákat fedze le, majd bővítse fokozatosan.' });
+  }
+  if (hum === 'extreme' || document.getElementById('has-dust').checked) {
+    risks.push({ sev:'low', icon:'🌡️', title:'Nehéz környezeti feltételek',
+      desc:'Extrém páratartalom vagy por esetén az RFID olvasóknak IP65 vagy magasabb védelmi fokozatúnak kell lenniük.',
+      fix:'Csak IP65+ minősítésű RFID olvasókat rendeljen. Ezek valamivel drágábbak, de nem tönkremennek a környezetben.' });
+  }
+
+  // ══ Ütemterv ══
+  let totalWeeks = 0;
+  const timeline = [];
+  let wk = 1;
+  if (state.infra.has_network !== 'yes') {
+    timeline.push({ wk: wk+'-'+(wk+2), title:'Hálózat kiépítése', color:'#fef9c3',
+      tasks:['Ethernet hálózat tervezése (IP-cím terv)','Kábelfektetés a tervezett olvasók helyéhez','Switch-ek rack-be szerelése','Hálózat tesztelése és dokumentálása'] });
+    wk += 3; totalWeeks += 3;
+  }
+  timeline.push({ wk: wk, title:'Előkészítés és tervezés', color:'#eff6ff',
+    tasks:['Helyszíni bejárás, olvasó-helyek véglegesítése','IP-cím terv az RFID olvasókhoz (pl. 192.168.1.100-110)','Szükséges engedélyek megszerzése (bérleti szerz., tűzoltóság)','RFID tagek megrendelése, szállítás ellenőrzése'] });
+  wk++; totalWeeks++;
+  timeline.push({ wk: wk+'-'+(wk+1), title:'Hardware telepítése', color:'#f0fdf4',
+    tasks:[`${readers} db RFID olvasó szerelése (mennyezet, fal, kapu)`,`${switches} db PoE switch bekötése`, 'Kábelezés és tesztelés','Szerver / mini PC elindítása, operációs rendszer telepítése'] });
+  wk += 2; totalWeeks += 2;
+  timeline.push({ wk: wk, title:'Szoftver konfiguráció', color:'#fefce8',
+    tasks:['RFID szoftver telepítése és alapkonfigurálása','Olvasók regisztrálása a szoftverben','Zónatérkép rajzolása (melyik olvasó melyik zóna)','RFID tagek felragasztása a kocsikra/eszközökre'] });
+  wk++; totalWeeks++;
+  timeline.push({ wk: wk, title:'Tesztelés és finomhangolás', color:'#fdf2f8',
+    tasks:['Teljes rendszerteszt: minden tag minden zónában','Holttér-ellenőrzés és extra olvasók elhelyezése ha szükséges','Érzékenység hangolása (RSSI küszöb)','Kezelők betanítása (2-4 óra), kézikönyv átadása'] });
+  wk++; totalWeeks++;
+  timeline.push({ wk: wk+'-'+(wk+2), title:'Éles indítás és garancia', color:'#f0fdf4',
+    tasks:['Fokozatos élesítés (1 zóna → összes)','Első hét sűrű monitoring, napi check','30 napos garancia periódus (gyártói)','Visszajelzés gyűjtése a kezelőktől, javítások'] });
+  totalWeeks += 3;
+
+  return {
+    readers, readersForArea, adjustedCoverage, coveragePct, coverageMult,
+    totalTags, tagsMain, tagsSpare, totalCableM, cableRolls,
+    switches, switchType, switchCost, needsServer, needsUPS, ductCount,
+    equipCost, laborCost, totalCost, budget,
+    risks, timeline, totalWeeks,
+    avgRun: Math.round(avgRun),
+    selectedObstacles, precision, area, ceiling, zones, gates, floors,
+    numItems, buildingAge,
+  };
+}
+
+// ══ UI FRISSÍTÉS ════════════════════════════════════════════════════════════
+function recalc() {
+  const r = calculate();
+  // Összegző panel
+  document.getElementById('sum-readers').textContent = r.readers + ' db';
+  document.getElementById('sum-tags').textContent = r.totalTags + ' db';
+  document.getElementById('sum-cable').textContent = r.totalCableM;
+  document.getElementById('sum-coverage-pct').textContent = r.coveragePct + '%';
+  document.getElementById('sum-equip-cost').textContent = formatHUF(r.equipCost);
+  document.getElementById('sum-labor-cost').textContent = formatHUF(r.laborCost);
+  document.getElementById('sum-total-cost').textContent = formatHUF(r.totalCost);
+  document.getElementById('sum-timeline').textContent = `~${r.totalWeeks} hét`;
+
+  // Budget bar
+  const budgetEl = document.getElementById('budget-indicator');
+  if (r.budget > 0) {
+    budgetEl.classList.remove('d-none');
+    const pct = Math.min(100, Math.round(r.totalCost / r.budget * 100));
+    const bar = document.getElementById('budget-fit-bar');
+    bar.style.width = pct + '%';
+    bar.className = 'progress-bar ' + (pct <= 85 ? 'bg-success' : pct <= 100 ? 'bg-warning' : 'bg-danger');
+    document.getElementById('budget-fit-label').innerHTML = pct <= 100
+      ? `<span class="text-success fw-semibold">${pct}% – belefér! ✅</span>`
+      : `<span class="text-danger fw-semibold">${pct}% – büdzsé szűk ⚠️</span>`;
+  }
+
+  // Risk badge
+  const highRisks = r.risks.filter(x => x.sev === 'high').length;
+  const medRisks = r.risks.filter(x => x.sev === 'medium').length;
+  const riskBadge = document.getElementById('sum-risk-badge');
+  if (highRisks > 0) {
+    riskBadge.innerHTML = `<span class="badge bg-danger px-4 py-2">🔴 Magas – ${highRisks} kritikus kockázat</span>`;
+  } else if (medRisks > 0) {
+    riskBadge.innerHTML = `<span class="badge bg-warning text-dark px-4 py-2">🟡 Közepes – ${medRisks} figyelendő pont</span>`;
+  } else {
+    riskBadge.innerHTML = `<span class="badge bg-success px-4 py-2">🟢 Alacsony – rendben!</span>`;
+  }
+
+  // Coverage warning
+  const cwarn = document.getElementById('coverage-warn');
+  if (r.coveragePct < 55) {
+    cwarn.classList.remove('d-none');
+    document.getElementById('coverage-warn-text').textContent =
+      `Az akadályok miatt a lefedettség ${r.coveragePct}%. A rendszer több olvasót igényel a megbízható működéshez.`;
+  } else {
+    cwarn.classList.add('d-none');
+  }
+}
+
+// ══ EREDMÉNY RENDERELÉS ════════════════════════════════════════════════════
+function renderResults() {
+  const r = calculate();
+  const budgetOk = r.totalCost <= r.budget * 1.1;
+
+  const html = `
+    <!-- Executive summary -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header py-3" style="background:linear-gradient(135deg,#1e3a8a,#3b82f6);color:white">
+        <h5 class="mb-0 fw-black"><i class="bi bi-file-earmark-check me-2"></i>RTLS Rendszer Terv</h5>
+        <div class="small opacity-75">Generálva: ${new Date().toLocaleDateString('hu-HU',{year:'numeric',month:'long',day:'numeric'})}</div>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-3 col-6">
+            <div class="text-center p-3 rounded-3" style="background:#eff6ff">
+              <div class="fw-black display-6 text-primary">${r.readers}</div>
+              <div class="fw-semibold">RFID olvasó</div>
+              <div class="text-muted small">db szükséges</div>
+            </div>
+          </div>
+          <div class="col-md-3 col-6">
+            <div class="text-center p-3 rounded-3" style="background:#f0fdf4">
+              <div class="fw-black display-6 text-success">${r.totalTags}</div>
+              <div class="fw-semibold">RFID tag</div>
+              <div class="text-muted small">${r.tagsMain} db + ${r.tagsSpare} db tartalék</div>
+            </div>
+          </div>
+          <div class="col-md-3 col-6">
+            <div class="text-center p-3 rounded-3" style="background:#fefce8">
+              <div class="fw-black display-6 text-warning">${r.totalCableM}</div>
+              <div class="fw-semibold">Kábel (m)</div>
+              <div class="text-muted small">~${r.avgRun}m/olvasó átlag</div>
+            </div>
+          </div>
+          <div class="col-md-3 col-6">
+            <div class="text-center p-3 rounded-3" style="${budgetOk ? 'background:#f0fdf4' : 'background:#fef2f2'}">
+              <div class="fw-black fs-4 ${budgetOk ? 'text-success' : 'text-danger'}">${formatHUF(r.totalCost)}</div>
+              <div class="fw-semibold">Teljes cost</div>
+              <div class="text-muted small">${budgetOk ? '✅ Büdzsén belül' : '⚠️ Büdzsé felett'}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert ${r.coveragePct >= 70 ? 'alert-success' : r.coveragePct >= 50 ? 'alert-warning' : 'alert-danger'} py-2 mb-0">
+          <strong>Jel-lefedettség becslés:</strong> Az Ön épületében az RFID olvasók az ideális hatótávolság
+          <strong>${r.coveragePct}%</strong>-ára képesek (akadályok miatt). ${r.readers} olvasóval
+          <strong>${r.readers > 1 ? 'teljesen' : 'részben'} lefedett</strong> a ${r.area} m² terület.
+          ${r.precision === 'precise' ? ' Precíziós RTLS módban ~1-3m pontossággal.' : ' Zóna-alapú követésben.'}
+        </div>
+      </div>
+    </div>
+
+    <!-- Eszközlista -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent py-2 d-flex align-items-center gap-2">
+        <i class="bi bi-cart-check fs-5 text-primary"></i>
+        <h6 class="mb-0 fw-bold">Teljes eszközbeszerzési lista (BOM)</h6>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Eszköz megnevezése</th>
+                <th class="text-center">Mennyiség</th>
+                <th class="text-end">Egységár</th>
+                <th class="text-end">Összesen</th>
+                <th>Megjegyzés</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bomRow('🔴', 'UHF RFID Olvasó (IP65, PoE)', r.readers, PRICES.reader, 'ATR7000 vagy egyenértékű. Mennyezeti/fali szerelés.')}
+              ${bomRow('🏷️', 'RFID Tag – passzív UHF', r.totalTags, PRICES.tag, `${r.tagsMain} db aktív + ${r.tagsSpare} db tartalék (15%)`)}
+              ${bomRow('🔌', `PoE Switch – ${r.switchType}`, r.switches, r.switchCost / r.switches, '802.3af/at, min. 15W/port')}
+              ${bomRow('🔗', 'Cat6 UTP kábel (100m tekercs)', r.cableRolls, PRICES.cat6_100m, `~${r.totalCableM}m összes, átl. ${r.avgRun}m/olvasó`)}
+              ${r.needsServer ? bomRow('🖥️', 'Mini PC szerver (8GB RAM, 256GB SSD)', 1, PRICES.server, 'Intel NUC vagy egyenértékű, 24/7 üzem') : ''}
+              ${bomRow('🔋', 'UPS szünetmentes tápegység (650VA)', 1, PRICES.ups, 'Hálózatkiesés esetén 15-30 perces védelmet nyújt')}
+              ${bomRow('📦', 'Kábelcsatorna (50m tekercs)', r.ductCount, PRICES.cable_duct_50m, 'Kábelek rendezett, védett lefektetéséhez')}
+              ${bomRow('🔧', 'RJ45 csatlakozó (100db)', Math.ceil(r.readers/10), PRICES.rj45_100, 'Kábel végein, szerszámmal krimpolva')}
+              ${bomRow('🔩', 'Szerelési konzol + csavar készlet', r.readers, PRICES.mount_per_reader, 'Mennyezeti/fali rögzítés, dübel+csavar')}
+            </tbody>
+            <tfoot class="table-light">
+              <tr class="fw-bold">
+                <td colspan="3" class="text-end">Eszközök összesen:</td>
+                <td class="text-end text-primary">${formatHUF(r.equipCost)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Munkaköltség -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent py-2 d-flex align-items-center gap-2">
+        <i class="bi bi-tools fs-5 text-warning"></i>
+        <h6 class="mb-0 fw-bold">Szerelési és beüzemelési munkák</h6>
+      </div>
+      <div class="card-body p-0">
+        <table class="table mb-0">
+          <tbody>
+            ${laborRow('RFID olvasók szerelése', r.readers, PRICES.labor_per_reader, 'Fúrás, rögzítés, bekötés, tesztelés olvasónként')}
+            ${state.infra.has_network !== 'yes' ? laborRow('Ethernet hálózat kiépítése', 1, PRICES.labor_network_base, 'Kábelfektetés, switch telepítés, konfigurálás') : ''}
+            ${laborRow('Szoftver telepítés és konfiguráció', 1, PRICES.labor_it_setup, 'Szerver OS, RFID szoftver, zónatérkép, tesztelés')}
+            ${laborRow('Kezelők betanítása', 1, PRICES.labor_training, '4 órás betanítás, kézikönyv, remote support 30 nap')}
+            ${state.infra.has_it === 'no' ? laborRow('Külső IT-cég – üzemeltetési szerződés', 1, 45000, '3 hónapos monitoring és hibaelhárítás') : ''}
+          </tbody>
+          <tfoot class="table-light">
+            <tr class="fw-bold">
+              <td colspan="2" class="text-end">Munka összesen:</td>
+              <td class="text-end text-warning">${formatHUF(r.laborCost)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Összefoglaló -->
+    <div class="card mb-3" style="border:2px solid #3b82f6">
+      <div class="card-body">
+        <div class="row g-3 align-items-center">
+          <div class="col-md-6">
+            <div class="fw-bold text-muted mb-1">Eszközök + anyag:</div>
+            <div class="fs-5">${formatHUF(r.equipCost)}</div>
+          </div>
+          <div class="col-md-6">
+            <div class="fw-bold text-muted mb-1">Szerelés + beüzemelés:</div>
+            <div class="fs-5">${formatHUF(r.laborCost)}</div>
+          </div>
+          <div class="col-12 border-top pt-3">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <div class="text-muted small">Teljes becsült projektköltség (ÁFA nélkül):</div>
+                <div class="fw-black fs-3 text-primary">${formatHUF(r.totalCost)}</div>
+                <div class="text-muted small">ÁFÁ-val (27%): ${formatHUF(Math.round(r.totalCost * 1.27))}</div>
+              </div>
+              <div class="text-end">
+                <div class="text-muted small">Tervezett büdzsé:</div>
+                <div class="fw-bold fs-5">${formatHUF(r.budget)}</div>
+                <div class="${r.totalCost <= r.budget ? 'text-success' : 'text-danger'} fw-semibold">
+                  ${r.totalCost <= r.budget ? '✅ Belefér' : '⚠️ ' + formatHUF(r.totalCost - r.budget) + ' túl'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Kockázati nyilvántartás -->
+    ${r.risks.length ? `
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent py-2 d-flex align-items-center gap-2">
+        <i class="bi bi-shield-exclamation fs-5 text-danger"></i>
+        <h6 class="mb-0 fw-bold">Kockázati nyilvántartás (${r.risks.length} azonosított kockázat)</h6>
+      </div>
+      <div class="card-body p-0">
+        ${r.risks.map((risk, i) => `
+        <div class="p-3 border-bottom d-flex gap-3 align-items-start">
+          <div class="fs-4 flex-shrink-0">${risk.icon}</div>
+          <div class="flex-grow-1">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="badge ${risk.sev==='high'?'bg-danger':risk.sev==='medium'?'bg-warning text-dark':'bg-secondary'}">
+                ${risk.sev==='high'?'🔴 Kritikus':risk.sev==='medium'?'🟡 Közepes':'🟢 Alacsony'}
+              </span>
+              <strong>${risk.title}</strong>
+            </div>
+            <div class="text-muted small mb-1">${risk.desc}</div>
+            <div class="small"><strong>Megoldás:</strong> ${risk.fix}</div>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>` : `
+    <div class="alert alert-success mb-3">
+      <i class="bi bi-check-circle me-2"></i><strong>Kiváló!</strong> Nem azonosítottunk komoly kockázatot az Ön konfigurációjában.
+    </div>`}
+
+    <!-- Megvalósítási ütemterv -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent py-2 d-flex align-items-center gap-2">
+        <i class="bi bi-calendar-check fs-5 text-success"></i>
+        <h6 class="mb-0 fw-bold">Megvalósítási ütemterv (~${r.totalWeeks} hét)</h6>
+      </div>
+      <div class="card-body p-3">
+        ${r.timeline.map((phase, i) => `
+        <div class="d-flex gap-3 mb-3 ${i < r.timeline.length-1 ? 'pb-3 border-bottom' : ''}">
+          <div class="flex-shrink-0 text-center" style="min-width:70px">
+            <div class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold text-white"
+                 style="width:42px;height:42px;background:#3b82f6;font-size:.85rem">${i+1}.</div>
+            <div class="text-muted small mt-1">${phase.wk}. hét</div>
+          </div>
+          <div class="flex-grow-1 p-3 rounded-3" style="background:${phase.color}">
+            <div class="fw-bold mb-2">${phase.title}</div>
+            <ul class="mb-0 small">
+              ${phase.tasks.map(t => `<li>${t}</li>`).join('')}
+            </ul>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Rendszerarchitektúra diagram -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent py-2">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-diagram-3 me-2 text-primary"></i>Rendszer architektúra</h6>
+      </div>
+      <div class="card-body p-3">
+        <div class="text-center" style="overflow-x:auto">
+          ${renderArchDiagram(r)}
+        </div>
+        <div class="mt-3 small text-muted">
+          <strong>Hogyan működik?</strong> Az RFID tagek (kis matricák a kocsikonn/eszközökön) rádiójeleket bocsátanak ki.
+          Az RFID olvasók (mennyezetre/falra szerelt dobozok) fogják ezeket a jeleket és Etherneten küldik a szervernek.
+          A szerver feldolgozza az adatokat és a böngészős dashboard-on megjeleníti a pozíciókat valós időben.
+        </div>
+      </div>
+    </div>
+
+    <!-- Következő lépések -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent py-2">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-rocket me-2 text-success"></i>Következő lépések</h6>
+      </div>
+      <div class="card-body">
+        <ol class="mb-0">
+          <li class="mb-2">📋 <strong>Nyomtassa ki ezt a tervet</strong> (Terv nyomtatása gomb fent) és mutassa meg a döntéshozóknak.</li>
+          <li class="mb-2">🏗️ <strong>Helyszíni bejárás:</strong> Kérjen be árajánlatot legalább 2-3 RFID-telepítéssel foglalkozó cégtől. Mutassa meg nekik ezt a BOM-ot.</li>
+          <li class="mb-2">🌐 <strong>Hálózat ellenőrzés:</strong> Kérje meg az IT-st (vagy egy hálózati szakembert), hogy mérje fel a meglévő hálózatot.</li>
+          <li class="mb-2">💰 <strong>Árajánlatok:</strong> Az eszközárak tájékoztató jellegűek. Kérjen pontos árat a hazai RFID-disztribútoroktól.</li>
+          <li class="mb-2">🧪 <strong>Pilot teszt:</strong> Fontolja meg, hogy 1 zónával, 3-4 olvasóval és 10 taggel kezdje a pilotot, mielőtt a teljes rendszert kiépíti.</li>
+        </ol>
+      </div>
+    </div>
+  `;
+  document.getElementById('results-container').innerHTML = html;
+  document.getElementById('btn-print').classList.remove('d-none');
+}
+
+function bomRow(icon, name, qty, unitPrice, note) {
+  const total = qty * unitPrice;
+  return `<tr>
+    <td>${icon} ${name}</td>
+    <td class="text-center">${qty} db</td>
+    <td class="text-end text-muted small">${formatHUF(unitPrice)}</td>
+    <td class="text-end fw-semibold">${formatHUF(total)}</td>
+    <td class="text-muted small">${note}</td>
+  </tr>`;
+}
+
+function laborRow(name, qty, unitPrice, note) {
+  return `<tr>
+    <td>🔧 ${name}</td>
+    <td class="text-muted small">${note}</td>
+    <td class="text-end fw-semibold">${formatHUF(qty * unitPrice)}</td>
+  </tr>`;
+}
+
+function renderArchDiagram(r) {
+  const readerCount = Math.min(r.readers, 5);
+  const readerBoxes = Array.from({length: readerCount}, (_,i) =>
+    `<div class="arch-box arch-reader">📡 Olvasó ${i+1}</div>`
+  ).join('');
+  const extra = r.readers > 5 ? `<div class="arch-box arch-reader" style="opacity:.6">+${r.readers-5} olvasó...</div>` : '';
+
+  return `<div class="arch-diagram">
+    <div class="arch-row">
+      <div class="arch-box arch-tag">🏷️ RFID Tag<br><small>(kocsin/eszközön)</small></div>
+      <div class="arch-box arch-tag" style="opacity:.7">🏷️ RFID Tag</div>
+      <div class="arch-box arch-tag" style="opacity:.5">🏷️ +${r.totalTags-2} tag</div>
+    </div>
+    <div class="arch-arrow">↓ rádióhullám (UHF 860-960 MHz)</div>
+    <div class="arch-row">${readerBoxes}${extra}</div>
+    <div class="arch-arrow">↓ Ethernet (Cat6, PoE)</div>
+    <div class="arch-row">
+      <div class="arch-box arch-switch">🔌 PoE Switch<br><small>(${r.switches} db)</small></div>
+    </div>
+    <div class="arch-arrow">↓ Ethernet</div>
+    <div class="arch-row">
+      <div class="arch-box arch-server">🖥️ Szerver<br><small>(folyamatosan fut)</small></div>
+    </div>
+    <div class="arch-arrow">↓ böngésző (HTTP/WebSocket)</div>
+    <div class="arch-row">
+      <div class="arch-box arch-dash">📊 Dashboard<br><small>(bármely böngészőből)</small></div>
+      <div class="arch-box arch-dash">📱 Telefon / Tablet</div>
+    </div>
+  </div>`;
+}
+
+// ══ VARÁZSLÓ NAVIGÁCIÓ ══════════════════════════════════════════════════════
+let currentStep = 0;
+const STEP_NAMES = ['Bevezetés','Mit követ?','Az épület','Akadályok','Infrastruktúra','Eredmény'];
+
+function goStep(n) {
+  document.getElementById(`step-${currentStep}`).classList.add('d-none');
+  currentStep = n;
+  document.getElementById(`step-${n}`).classList.remove('d-none');
+  document.getElementById('step-label').textContent = `${n+1} / ${STEP_NAMES.length} lépés`;
+  document.getElementById('step-name').textContent = STEP_NAMES[n];
+  document.getElementById('wizard-progress').style.width = ((n+1)/STEP_NAMES.length*100) + '%';
+  // Dots
+  STEP_NAMES.forEach((_,i) => {
+    const dot = document.getElementById('dot-'+i);
+    dot.classList.toggle('active', i <= n);
+    dot.classList.toggle('done', i < n);
+  });
+  if (n === 5) renderResults();
+  window.scrollTo({top:0, behavior:'smooth'});
+  recalc();
+}
+
+function resetWizard() {
+  if (!confirm('Biztosan törli a kitöltött adatokat és újrakezdi?')) return;
+  location.reload();
+}
+
+// ══ AKADÁLYOK INIT ══════════════════════════════════════════════════════════
+function initObstacles() {
+  const grid = document.getElementById('obstacle-grid');
+  grid.innerHTML = OBSTACLES.map(obs => `
+    <div class="col-md-6">
+      <div class="obstacle-card p-3 rounded-3 border d-flex align-items-start gap-2"
+           id="obs-${obs.id}" onclick="toggleObstacle('${obs.id}',this)" style="cursor:pointer;transition:.15s">
+        <div class="flex-shrink-0 fs-4">${obs.icon}</div>
+        <div class="flex-grow-1">
+          <div class="fw-semibold">${obs.name}</div>
+          <div class="text-muted small">${obs.desc}</div>
+          <div class="badge bg-secondary mt-1" style="font-size:.65rem">Jel-gyengítés: ~${Math.round(obs.penalty*100)}%</div>
+        </div>
+        <div class="flex-shrink-0 obs-check" style="width:22px;height:22px;border-radius:50%;border:2px solid #cbd5e1;margin-top:2px"></div>
+      </div>
+    </div>`).join('');
+}
+
+function toggleObstacle(id, el) {
+  const idx = state.obstacles.indexOf(id);
+  if (idx >= 0) {
+    state.obstacles.splice(idx, 1);
+    el.style.background = '';
+    el.style.borderColor = '';
+    el.querySelector('.obs-check').style.background = '';
+    el.querySelector('.obs-check').style.borderColor = '#cbd5e1';
+  } else {
+    state.obstacles.push(id);
+    el.style.background = '#fef3c7';
+    el.style.borderColor = '#f59e0b';
+    el.querySelector('.obs-check').style.background = '#f59e0b';
+    el.querySelector('.obs-check').style.borderColor = '#f59e0b';
+  }
+  recalc();
+}
+
+// ══ TRACKING CARDS ══════════════════════════════════════════════════════════
+function toggleTrackType(el) {
+  const val = el.dataset.value;
+  const idx = state.trackTypes.indexOf(val);
+  if (idx >= 0) {
+    state.trackTypes.splice(idx, 1);
+    el.classList.remove('border-primary','bg-primary');
+    el.querySelector('.card-body').style.background = '';
+    el.querySelector('.fw-bold').style.color = '';
+  } else {
+    state.trackTypes.push(val);
+    el.classList.add('border-primary');
+    el.querySelector('.card-body').style.background = '#eff6ff';
+  }
+  recalc();
+}
+
+function selectPrecision(el) {
+  document.querySelectorAll('.prec-card').forEach(c => {
+    c.classList.remove('selected','border-primary');
+    c.style.background = '';
+  });
+  el.classList.add('selected','border-primary');
+  el.style.background = '#eff6ff';
+  state.precision = el.dataset.value;
+  recalc();
+}
+
+// ══ INFRASTRUKTÚRA GOMBOK ═══════════════════════════════════════════════════
+function setInfra(btn) {
+  const field = btn.dataset.field;
+  const val = btn.dataset.val;
+  state.infra[field] = val;
+  btn.closest('.btn-group').querySelectorAll('.infra-btn').forEach(b => {
+    b.classList.remove('active','btn-success','btn-warning','btn-danger');
+    if (b.classList.contains('btn-outline-success')) b.classList.add('btn-outline-success');
+  });
+  btn.classList.add('active');
+  recalc();
+}
+
+// ══ AREA HELPER ═════════════════════════════════════════════════════════════
+function guessArea() {
+  const el = document.getElementById('area-helper');
+  el.classList.toggle('show');
+}
+
+function calcArea() {
+  const l = +document.getElementById('ah-len').value;
+  const w = +document.getElementById('ah-wid').value;
+  if (l && w) {
+    const area = l * w;
+    document.getElementById('ah-result').textContent = `Alapterület: ${area} m²`;
+    document.getElementById('total-area').value = area;
+    recalc();
+  }
+}
+
+// ══ SEGÉD FÜGGVÉNYEK ════════════════════════════════════════════════════════
+function formatHUF(n) {
+  if (!n && n !== 0) return '–';
+  return n.toLocaleString('hu-HU') + ' Ft';
+}
+
+// ══ INIT ════════════════════════════════════════════════════════════════════
+initObstacles();
+// Default precision selection
+document.querySelector('.prec-card[data-value="zone"]').classList.add('border-primary');
+document.querySelector('.prec-card[data-value="zone"]').style.background = '#eff6ff';
+recalc();
+</script>
+
+<style>
+/* ── Wizard step dots ── */
+.step-dot { color:#94a3b8; font-weight:600; transition:.2s; }
+.step-dot.active { color:#3b82f6; }
+.step-dot.done { color:#22c55e; }
+
+/* ── Track type cards ── */
+.track-card { cursor:pointer; border-color:#e2e8f0!important; transition:.15s; }
+.track-card:hover { border-color:#3b82f6!important; box-shadow:0 0 0 2px #bfdbfe; }
+.track-card.selected, .track-card.border-primary { border-color:#3b82f6!important; }
+
+/* ── Precision cards ── */
+.prec-card { cursor:pointer; border-color:#e2e8f0!important; transition:.15s; }
+.prec-card:hover { border-color:#3b82f6!important; }
+.prec-card.selected { border-color:#3b82f6!important; }
+
+/* ── Infra questions ── */
+.infra-btn.active { font-weight:700 !important; }
+
+/* ── Architecture diagram ── */
+.arch-diagram { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.arch-row { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+.arch-box { padding:10px 16px; border-radius:10px; font-weight:600; font-size:.82rem; text-align:center; min-width:110px; }
+.arch-tag    { background:#eff6ff; border:2px solid #93c5fd; color:#1e3a8a; }
+.arch-reader { background:#fef2f2; border:2px solid #fca5a5; color:#7f1d1d; }
+.arch-switch { background:#fefce8; border:2px solid #fde68a; color:#78350f; }
+.arch-server { background:#f0fdf4; border:2px solid #86efac; color:#14532d; }
+.arch-dash   { background:#fdf4ff; border:2px solid #d8b4fe; color:#581c87; }
+.arch-arrow  { font-size:.8rem; color:#94a3b8; font-weight:600; }
+
+/* ── Print styles ── */
+@media print {
+  .sidebar, .topbar, .d-flex.justify-content-between:last-child,
+  #btn-print, .col-xl-4, .wizard-step:not(#step-5) { display:none!important; }
+  .col-xl-8 { width:100%!important; max-width:100%!important; flex:0 0 100%!important; }
+  .card { break-inside:avoid; box-shadow:none!important; border:1px solid #e2e8f0!important; }
+  body { font-size:12px; }
+}
+</style>
+{% endblock %}

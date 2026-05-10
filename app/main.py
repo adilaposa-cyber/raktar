@@ -148,6 +148,10 @@ async def page_factory_admin(request: Request):
 async def page_hall_map(request: Request, hall_id: int):
     return templates.TemplateResponse("hall_map.html", {"request": request, "page": "factory_admin", "hall_id": hall_id})
 
+@app.get("/rtls-planner")
+async def page_rtls_planner(request: Request):
+    return templates.TemplateResponse("rtls_planner.html", {"request": request, "page": "rtls_planner"})
+
 
 if __name__ == "__main__":
     import uvicorn
