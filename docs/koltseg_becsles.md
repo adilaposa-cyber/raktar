@@ -119,7 +119,7 @@ redundancia → **8 db**.
 | Dokumentáció | 2–3 nap | 500 – 700 EUR/nap | 1 000 – 2 100 | 400 – 840 |
 | **Részösszeg: LN integráció** | **23–41 nap** | | **15 700 – 40 100** | **6 280 – 16 040** |
 
-> **Megjegyzés**: Az Infor LN integráció összetettsége az igényektől erősen függ. Ha csak egy egyszerű raktárhely-frissítési webhook elegendő, a kisebb érték reális. Ha teljes WMS ↔ ERP szinkronizáció (raklapmovement, inventory sync, GI/GR tranzakció) szükséges, a felső érték közelíthető.
+> **Megjegyzés**: Az Infor LN integráció összetettsége az igényektől erősen függ. Ha csak egy egyszerű raktárhely-frissítési webhook elegendő, a kisebb érték reális. Ha a teljes BOD-készlet kell (raklapmozgás, leltár-egyeztetés, GI/GR tranzakció), a felső érték közelíthető.
 
 ---
 
@@ -220,7 +220,7 @@ Az RFID RTLS rendszer az alábbi területeken hoz mérhető megtakarítást:
 
 ## 6. Fontos Megjegyzések és Kockázatok
 
-1. **Infor LN integráció a legnagyobb bizonytalansági faktor**: Az ERP integráció fejlesztési időigénye 23–41 napra becsült. Ha az Infor LN verzió idősebb (pl. 10.x vs 12.x), vagy ha az ION integrációs réteg nincs konfigurálva, a fejlesztési idő és cost jelentősen nőhet.
+1. **Infor LN integráció a legnagyobb bizonytalansági faktor**: Az LN integráció fejlesztési időigénye 23–41 napra becsült. Ha az Infor LN verzió idősebb (pl. 10.x vs 12.x), vagy ha az ION integrációs réteg nincs konfigurálva, a fejlesztési idő és cost jelentősen nőhet.
 
 2. **A szoftver ingyenes**: Jelen rendszer nyílt forráskódú, nincs licenszdíja. Ez komoly előny az üzleti RFID middleware megoldásokhoz képest (pl. Zebra Savanna, Impinj ItemSense).
 

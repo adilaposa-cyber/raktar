@@ -1,5 +1,10 @@
-# RFID Raktar – Rendszerleírás és összehasonlítás
+# RFID raklapkövetés – rendszerleírás és összehasonlítás
 ## Miért jobb ez a rendszer a jelenlegi megoldásnál?
+
+> **A hatókör:** ez nem ERP és nem WMS – az Infor LN mellé települő
+> nyomonkövetés. Arra válaszol, hogy egy kocsi vagy raklap **hol van most**,
+> **hogyan került oda** és **mióta áll ott**, és minden helyváltozást lejelent
+> az LN felé. A cikktörzs, a készlet és a rendelés az Infor LN-é marad.
 
 ---
 
@@ -42,9 +47,14 @@ A legtöbb magyarországi gyárban a komissiózó kocsik és szerelési álláso
 - Látható, ki éppen melyik targoncán dolgozik és mióta
 - Teljes szekció-napló: ki mikor volt ott, mennyi ideig
 
-### 5. Infor LN integráció (CSV import)
-- A készlet, cikkek és megrendelések importálhatók az Infor LN rendszerből
-- Nem kell kézzel beírni az adatokat – CSV fájl feltöltésével automatikusan betöltődik
+### 5. Infor LN integráció (ION BOD, kétirányú)
+- **LN → rendszer**: a Handling Unit és a cikktörzs tükrözve érkezik
+  (`SyncHandlingUnit`, `SyncItemMaster`), így nem kell kézzel beírni semmit
+- **Rendszer → LN**: minden fizikai helyváltozás automatikusan lejelentődik
+  `SyncWarehouseTransfer` BOD-ként – ez a rendszer legfontosabb kimenete
+- Amíg nincs élő ION kapcsolat, a lejelentés DRY-RUN módban naplózódik, és az
+  LN HU-listája Excel/CSV fájlból tölthető be
+- A rendszer **soha nem ír törzsadatot** az LN-be
 
 ### 6. Üzem struktúra
 - Az egész gyár hierarchia tárolható: Üzem → Csarnok → Munkaállomás
@@ -59,10 +69,9 @@ A legtöbb magyarországi gyárban a komissiózó kocsik és szerelési álláso
 |---|---|---|
 | Kocsi pozíció láthatósága | Nem látható / szóbeli | Valós idő, élő térkép |
 | Kitárolt kocsi riasztás | Nincs | Automatikus 5 perc után |
-| Napi gyártási terv | Papír, Excel tábla | Digitális, kattintható |
 | Targoncás nyilvántartás | Papír / szóbeli | RFID bejelentkezés, napló |
 | Hézagoló lemez igény | Post-it / fejből | Állomásonként rögzítve |
-| Infor LN adatok | Kézi másolás | Automatikus CSV import |
+| Infor LN lejelentés | Kézi könyvelés utólag | Automatikus BOD minden mozgásnál |
 | Frissítési sebesség | Kézzel, műszakonként | Valós idő (másodpercek) |
 | Térbeli áttekintés | Nincs | SVG alaprajz, vizuális |
 | Mobilos elérés | Nincs | Targoncás felület telefonon |
@@ -78,7 +87,7 @@ A legtöbb magyarországi gyárban a komissiózó kocsik és szerelési álláso
 |---|---|---|---|
 | "Hol van az X kocsi?" kérdés | 3-10 perc | 5 másodperc | **~95%** |
 | Kitárolt kocsi észrevétele | 15-60 perc | Automatikus (5 perc) | **~80%** |
-| Napi terv rögzítése | 20-30 perc | 5-10 perc | **~65%** |
+| Mozgás lekönyvelése LN-ben | 15-30 mp / mozgás | Automatikus | **~100%** |
 | Hézagoló lemez lista | 5-15 perc | Azonnali, 1 kattintás | **~90%** |
 | Targoncás bejelentkezés napló | 5-10 perc/nap | Automatikus | **~100%** |
 
@@ -88,7 +97,10 @@ A legtöbb magyarországi gyárban a komissiózó kocsik és szerelési álláso
 
 - **Backend**: FastAPI (Python) – gyors, modern, skálázható
 - **Adatbázis**: SQLite (fejlesztés) → PostgreSQL (éles) – könnyen migrálható
-- **RFID hardware**: ATR7000 RTLS olvasók (10 db, HK01-HK10)
+- **RFID hardver**: Zebra ATR7000 RTLS olvasók a **mennyezetre függesztve**
+  (beépített fázisvezérelt antennasor, külső antenna nem kell, PoE+ táplálás).
+  A rendszer nem kapus: az olvasók folyamatosan látják a tageket alattuk és
+  koordinátát adnak, amiből az alaprajz dönti el a helyet.
 - **Kommunikáció**: WebSocket alapú valós idejű frissítés
 - **Frontend**: Bootstrap 5, SVG alaprajz – böngészőből elérhető, nincs telepítés
 - **Szimulátor**: Szoftveres RFID szimulátor – hardware nélkül is tesztelhető
@@ -98,7 +110,8 @@ A legtöbb magyarországi gyárban a komissiózó kocsik és szerelési álláso
 ## Bevezetési lépések
 
 1. **Konfiguráció** (1-2 nap): Üzem, csarnokok, munkaállomások rögzítése
-2. **RFID érzékelők telepítése** (1-2 nap): HK01-HK10 pozicionálása, hálózat
+2. **ATR7000 olvasók telepítése** (2-3 nap): mennyezeti függesztés 4–6 m
+   magasan emelőkosárral, PoE+ hálózat kiépítése, majd 3–4 nap behangolás
 3. **Kocsi RFID tagek** (1 nap): Minden kocsihoz tag rögzítése + EPC regisztrálás
 4. **Oktatás** (fél nap): Műszakvezető, targoncások, adminisztrátor
 5. **Éles indítás**: Fokozatos bevezetés, szimulátorral párhuzamosan tesztelhető
