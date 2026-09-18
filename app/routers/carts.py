@@ -151,6 +151,26 @@ def cart_stats(db: Session = Depends(get_db)):
     return {r[0]: r[1] for r in rows}
 
 
+@router.get("/movements")
+def list_movements(limit: int = 60, db: Session = Depends(get_db)):
+    """Legutóbbi mozgások listája."""
+    movements = db.query(models.CartMovement).options(
+        joinedload(models.CartMovement.cart)
+    ).order_by(models.CartMovement.moved_at.desc()).limit(limit).all()
+    return [
+        {
+            "id": m.id,
+            "cart_number": m.cart.cart_number if m.cart else "?",
+            "from": m.from_position,
+            "to": m.to_position,
+            "operator": m.operator,
+            "hk_reader": m.hk_reader,
+            "moved_at": m.moved_at.isoformat() if m.moved_at else None,
+        }
+        for m in movements
+    ]
+
+
 @router.get("/{cart_id}")
 def get_cart(cart_id: int, db: Session = Depends(get_db)):
     cart = db.query(models.Cart).options(joinedload(models.Cart.rfid_tag)).filter(
@@ -339,23 +359,3 @@ async def process_rfid_event(
         "from": old_position,
         "to": new_position,
     }
-
-
-@router.get("/movements")
-def list_movements(limit: int = 60, db: Session = Depends(get_db)):
-    """Legutóbbi mozgások listája."""
-    movements = db.query(models.CartMovement).options(
-        joinedload(models.CartMovement.cart)
-    ).order_by(models.CartMovement.moved_at.desc()).limit(limit).all()
-    return [
-        {
-            "id": m.id,
-            "cart_number": m.cart.cart_number if m.cart else "?",
-            "from": m.from_position,
-            "to": m.to_position,
-            "operator": m.operator,
-            "hk_reader": m.hk_reader,
-            "moved_at": m.moved_at.isoformat() if m.moved_at else None,
-        }
-        for m in movements
-    ]
