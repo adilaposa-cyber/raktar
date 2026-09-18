@@ -5,12 +5,28 @@
 
 ---
 
+## A rendszer felépítése: mennyezeti ATR7000, nem kapus
+
+A rendszer **nem** áthaladás-érzékelő kapukra épül. Mennyezetre lógatott Zebra
+ATR7000 olvasók folyamatosan látják a tageket az alattuk lévő területen, és
+irányszöget mérnek hozzájuk – ebből jön ki, melyik zónában van az eszköz.
+Nem kell kapun áthaladni ahhoz, hogy a rendszer tudja, hol a kocsi.
+
+**Fontos a beszerzéshez:** az ATR7000 beépített fázisvezérelt antennasorral
+dolgozik, **nem kell hozzá külön antenna és koaxiális kábel** – ez a
+FX-sorozat (FX9600/FX7500) jellemzője, amit kapus felállásnál használnának.
+Ezért ebben a listában nincs külön antenna és LMR-400 tétel.
+
 ## Előfeltételek és méretezési alapelvek
 
-- Tipikus raktárméret: 2 000–5 000 m²
-- Olvasók elhelyezése: 1 ATR7000 olvasó kb. 600–900 m² lefedettséghez (4 antenna, nyílt tér)
-- Villasállás-/szállítóeszköz-követéshez: bejáratok, folyosók, kapuk mellé is szükséges olvasó
-- Az alábbi mennyiségek egy ~3 000 m²-es, közepes raktárra vonatkoznak; skálázható
+- Tipikus csarnokméret: 1 000–7 000 m²
+- Lefedettség: 1 ATR7000 kb. **600–900 m²** nyílt téren, **300–500 m²** sűrű
+  fémpolcos / fémvázas környezetben
+- Optimális felfüggesztési magasság: 4–6 m; 8 m felett romlik a zónapontosság
+- Tervezéskor +20–25% redundancia, hogy egy kiesett olvasó ne vakítson meg zónát
+- Referencia (anchor) tagek fix pontokon: a koordináta-kalibrációhoz kellenek,
+  mennyezeti felállásnál nem opcionálisak
+- Az alábbi mennyiségek egy ~3 000 m²-es csarnokra vonatkoznak; skálázható
 
 ---
 
@@ -19,11 +35,8 @@
 | # | Megnevezés | Modell / Specifikáció | Mennyiség | Megjegyzés |
 |---|---|---|---|---|
 | **RFID OLVASÓK** | | | | |
-| 1 | Fix RFID olvasó (RTLS) | Zebra ATR7000 UHF RFID Reader | 4–6 db | ~3 000 m²-es raktárhoz; minden olvasóhoz 4 antenna csatlakoztatható. Ethernet + PoE; LLRP protokoll; beépített webszerver. |
-| 2 | Kapu/zóna RFID olvasó (opcionális) | Zebra FX9600 UHF RFID Reader | 2–4 db | Betárolási/kitárolási kapu ellenőrzéshez; 8 antenna port/egység. Használható a ATR7000 mellett a kapuknál. |
-| **ANTENNÁK** | | | | |
-| 3 | Beltéri UHF RFID antenna (cirkulárisan polarizált) | Zebra AN480 vagy Laird S9028PCL (9 dBic, RHCP, N-csatlakozó) | 16–24 db | 4 db/olvasó; nyílt raktárnál elegendő. Falra/mennyezetre szerelhető. IP65 minősítés ajánlott. |
-| 4 | Antenna-kábel (antenna ↔ olvasó) | LMR-400 koaxiális kábel, N-Male mindkét végén | 16–24 db (à 5–10 m) | Max. 10 m/kábel ATR7000-hez; hosszabb távolságnál jelerősítő szükséges. Megrendelhető kész szerelt hosszban. |
+| 1 | Mennyezeti RTLS olvasó | Zebra ATR7000 UHF RFID RTLS Reader | 6–8 db | ~3 000 m²-es csarnokhoz, sűrű fémkörnyezetre méretezve. Beépített fázisvezérelt antennasor – külső antenna NEM kell. Ethernet + PoE+ (802.3at); LLRP; beépített webszerver. |
+| 2 | ATR7000 mennyezeti szerelőkészlet | Zebra gyári mennyezeti/gerenda konzol | 6–8 db | Olvasónként 1 db. Beton- és acélvázhoz is; a dőlésszög állítható. |
 | **UHF RFID CÍMKÉK** | | | | |
 | 5 | Raklap (pallet) RFID címke | Zebra ZT610 nyomtatóval kompatibilis UHF RFID inlay; vagy kész: Avery Dennison AD-221r6 (Monza R6 chip) | 2 000–5 000 db/év | EPC Gen2, ISO 18000-63; 915 MHz EU band (865–868 MHz). Olvasási távolság: 3–6 m tipikusan. |
 | 6 | Targonca/ipari jármű RFID tag | Zebra RFID Hard Tag; vagy Confidex Steelwave Micro II (fémfelületre) | 15–25 db | Fémfelületre ragasztható/csavarozható, IP68, -25°C–+70°C; olvasható közelről és kapukon áthaladva. |
@@ -45,9 +58,9 @@
 | 19 | UPS – hálózati rack | APC Back-UPS Pro 1200VA (BR1200GI) | 1 db | Rack switchek védelméhez, ha külön helyen van. |
 | 20 | Túlfeszültségvédő elosztó (rack) | APC Rack PDU, 1U, 230V, 16A, 8× C13 | 2 db | Rack belső tápellátáshoz. |
 | **SZERELÉSI KELLÉKEK** | | | | |
-| 21 | Falra/mennyezetre szerelhető antenna tartókonzol | Acme/Anixter univerzális RFID antenna konzol (állítható szög, VESA kompatibilis) | 16–24 db | Minden antennához 1 db; beton/fém gerenda rögzítéshez alkalmas. |
-| 22 | ATR7000 olvasó rögzítőkészlet | Zebra gyári szerelőkészlet ATR7000-hez (DIN sín vagy fali rögzítés) | 4–6 db | Gyárból rendelhető tartozék; tartalmazza csavarokat, tömítéseket. |
-| 23 | Ipari műanyag kábelvédő cső (flex) | Kopex / Anamet 20 mm flexibilis fémszálas kábelvédő | 30–50 fm | Antenna-kábelek védelmére azokon a szakaszokon, ahol mechanikai behatás érhet (villás emelő útvonal). |
+| 21 | Címkenyomtató (RFID kódolós) | Zebra ZT411 **RFID** kivitel, UHF encoder | 1–2 db | A raklap- és kocsicímkék nyomtatása + EPC kódolása egy lépésben. FIGYELEM: a sima ZT411 nem tud RFID-t, csak az RFID kivitel vagy utólag beszerelt RFID kit. Ellenőrzés: konfigurációs címke nyomtatása – ha van RFID modul, megjelenik rajta a reader firmware verziója. |
+| 22 | Emelőkosár / görgős állvány bérlés | 8–12 m munkamagasság | 2–4 nap | A mennyezeti olvasók felszereléséhez. Kapus felállásnál nem kellene, itt igen – tervezd be. |
+| 23 | Ipari műanyag kábelvédő cső (flex) | Kopex / Anamet 20 mm flexibilis fémszálas kábelvédő | 30–50 fm | Hálózati kábelek védelmére azokon a szakaszokon, ahol mechanikai behatás érhet (villás emelő útvonal). |
 | 24 | Kábeles kábelkötegelő | UV-álló nylon kábelkötegelő, 300 mm és 450 mm vegyesen | 200 db | Rendezett kábelvezetéshez. |
 | 25 | Csavar, dübel, rögzítő készlet | M6 rozsdamentes csavar + fém dübel betonhoz; M8 egyéb | 1 készlet (~200 db) | Mennyezeti antenna és olvasó rögzítéséhez; beton + acélváz elemekhez. |
 | 26 | Ipari jelölőtábla / táblarendszer | Laminált tábla RFID zónákhoz (A4, 2 mm PVC) | 10–20 db | Zónahatárok, olvasó-helyszínek megjelölésére a raktárban. |
@@ -74,9 +87,9 @@
 
 ## Megjegyzések a Méretezéshez
 
-1. **Olvasók száma**: Az ATR7000 4 antennája 4 szektort fed. Nyílt raktárban mennyezetre szerelt antennákkal 1 olvasó kb. 600–900 m²-t fed le (antenna dőlésszögtől és polcelhelyezéstől függően). Állványos, sűrű raktárban ez 300–500 m²-re csökkenthet.
+1. **Olvasók száma**: Az ATR7000 a beépített antennasorával sugárnyalábot pásztáz maga alatt. Nyílt csarnokban 1 olvasó kb. 600–900 m²-t fed le, sűrű fémpolcos környezetben 300–500 m²-t. A rendszer zóna-pontosságú (tipikusan 1–3 m), nem centiméteres – szerelőállások megkülönböztetésére elég, raklapon belüli pozícióra nem.
 
-2. **Antenna magasság**: Optimális 4–6 m mennyezeti magasságban; 8 m felett a visszaverődések és a zóna-pontosság romlik. Magas raktárnál (+8 m) oldalsó antenna-elhelyezés is szükséges lehet.
+2. **Felfüggesztési magasság**: Optimális 4–6 m; 8 m felett a visszaverődések és a zónapontosság romlik. Magas csarnoknál oldalsó kiegészítő olvasók is kellhetnek.
 
 3. **Fémkörnyezet**: Fémpolcok, acélváz erősen befolyásolja az RFID terjedést. Helyszínfelmérés (site survey) elvégzése kötelező a végleges antenna-terv előtt.
 
