@@ -4,6 +4,15 @@
 **Magyar gyártóvállalat számára**
 **Árfolyam: 1 EUR = 400 HUF (tájékoztató jellegű)**
 
+> **Hatókör:** ez a becslés a **teljes üzemre** szól – raklapok, göngyöleg,
+> raktári zónák, targoncás modul és Infor LN integráció együtt, passzív UHF
+> (ATR7000) alapon.
+>
+> Ha az első lépés csak a **szerelde 20 komissiózó kocsijának** követése, akkor
+> nem ez a dokumentum az irányadó, hanem a
+> [`1_fazis_szerelde_pilot.md`](1_fazis_szerelde_pilot.md) – arra a szűkebb
+> feladatra más technológia (UWB) és lényegesen kisebb összeg jön ki.
+
 ---
 
 > **Figyelmeztetés**: Az alábbi árak tájékoztató jellegűek (2024–2025 piaci adatok alapján). A tényleges árak ajánlatkéréstől, mennyiségtől, viszonteladói árazástól és piaci körülményektől függően eltérhetnek. Minden tételnél megadjuk a reális minimum–maximum sávot.

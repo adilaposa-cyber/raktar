@@ -17,6 +17,10 @@ dolgozik, **nem kell hozzá külön antenna és koaxiális kábel** – ez a
 FX-sorozat (FX9600/FX7500) jellemzője, amit kapus felállásnál használnának.
 Ezért ebben a listában nincs külön antenna és LMR-400 tétel.
 
+> **Hatókör:** ez a lista a teljes üzemre szól, passzív UHF (ATR7000) alapon.
+> Ha az első lépés csak a szerelde 20 komissiózó kocsijának követése, lásd a
+> [`1_fazis_szerelde_pilot.md`](1_fazis_szerelde_pilot.md) dokumentumot.
+
 ## Előfeltételek és méretezési alapelvek
 
 - Tipikus csarnokméret: 1 000–7 000 m²
