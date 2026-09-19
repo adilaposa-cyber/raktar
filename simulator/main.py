@@ -8,6 +8,7 @@ RFID ATR7000 Szoftver Szimulátor
 Indítás: python simulator/main.py
 UI: http://localhost:8001
 """
+import os
 import asyncio
 import random
 import json
@@ -102,7 +103,10 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="RFID Szimulátor", lifespan=lifespan)
-app.mount("/static", StaticFiles(directory="simulator/static"), name="sim_static")
+# A szimulátornak nincs saját statikus fájlja – csak akkor csatoljuk,
+# ha a könyvtár tényleg létezik (különben a szerver indításkor elszáll).
+if os.path.isdir("simulator/static"):
+    app.mount("/static", StaticFiles(directory="simulator/static"), name="sim_static")
 templates = Jinja2Templates(directory="simulator/templates")
 
 # ── WebSocket broadcast ───────────────────────────────────────────────────────

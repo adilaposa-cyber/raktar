@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime
@@ -16,7 +16,7 @@ def _gen_task_number():
 
 @router.get("/", response_model=List[schemas.TaskOut])
 def list_tasks(
-    status: Optional[str] = None,
+    status: Optional[List[str]] = Query(None),
     task_type: Optional[str] = None,
     assigned_to: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -27,7 +27,8 @@ def list_tasks(
         joinedload(models.Task.to_location),
     )
     if status:
-        q = q.filter(models.Task.status == status)
+        # Több status is megadható: ?status=pending&status=assigned
+        q = q.filter(models.Task.status.in_(status))
     if task_type:
         q = q.filter(models.Task.task_type == task_type)
     if assigned_to:

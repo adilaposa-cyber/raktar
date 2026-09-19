@@ -4,6 +4,15 @@
 **Magyar gyártóvállalat számára**
 **Árfolyam: 1 EUR = 400 HUF (tájékoztató jellegű)**
 
+> **Hatókör:** ez a becslés a **teljes üzemre** szól – raklapok, göngyöleg,
+> raktári zónák, targoncás modul és Infor LN integráció együtt, passzív UHF
+> (ATR7000) alapon.
+>
+> Ha az első lépés csak a **szerelde 20 komissiózó kocsijának** követése, akkor
+> nem ez a dokumentum az irányadó, hanem a
+> [`1_fazis_szerelde_pilot.md`](1_fazis_szerelde_pilot.md) – arra a szűkebb
+> feladatra más technológia (UWB) és lényegesen kisebb összeg jön ki.
+
 ---
 
 > **Figyelmeztetés**: Az alábbi árak tájékoztató jellegűek (2024–2025 piaci adatok alapján). A tényleges árak ajánlatkéréstől, mennyiségtől, viszonteladói árazástól és piaci körülményektől függően eltérhetnek. Minden tételnél megadjuk a reális minimum–maximum sávot.
@@ -14,15 +23,21 @@
 
 ### 1.1 Hardver Költségek
 
-#### RFID Olvasók és Antennák
+#### Mennyezeti RTLS olvasók
+
+A rendszer nem kapus: mennyezetre lógatott ATR7000 olvasók adják a pozíciót.
+Az ATR7000 beépített fázisvezérelt antennasorral dolgozik, **külső antenna és
+koaxiális kábel nem kell hozzá** – ez a korábbi, kapus tervezet tétele volt.
+
+Méretezés ~3 000 m²-es, fémpolcos csarnokra: 400–500 m²/olvasó + 20–25%
+redundancia → **8 db**.
 
 | Tétel | Mennyiség | Egységár (EUR) min–max | Összesen (EUR) min–max | Összesen (HUF ezer) min–max |
 |---|---|---|---|---|
-| Zebra ATR7000 RFID olvasó | 5 db | 1 800 – 2 500 EUR | 9 000 – 12 500 | 3 600 – 5 000 |
-| Zebra FX9600 kapu olvasó | 2 db | 1 400 – 2 000 EUR | 2 800 – 4 000 | 1 120 – 1 600 |
-| UHF RFID antenna (Laird S9028 vagy egyenértékű) | 20 db | 80 – 150 EUR | 1 600 – 3 000 | 640 – 1 200 |
-| Antenna koaxiális kábel LMR-400 (kész hosszak) | 20 db | 30 – 80 EUR | 600 – 1 600 | 240 – 640 |
-| **Részösszeg: Olvasók + antennák** | | | **14 000 – 21 100** | **5 600 – 8 440** |
+| Zebra ATR7000 mennyezeti RTLS olvasó | 8 db | 1 800 – 2 500 EUR | 14 400 – 20 000 | 5 760 – 8 000 |
+| ATR7000 mennyezeti szerelőkészlet | 8 db | 50 – 150 EUR | 400 – 1 200 | 160 – 480 |
+| Emelőkosár / állvány bérlés a szereléshez | 2–4 nap | 80 – 150 EUR/nap | 160 – 600 | 64 – 240 |
+| **Részösszeg: Mennyezeti olvasók** | | | **14 960 – 21 800** | **5 984 – 8 720** |
 
 #### RFID Címkék (Induló készlet)
 
@@ -31,7 +46,7 @@
 | UHF RFID raklap label (Avery Dennison, Monza R6) | 2 000 db | 0,08 – 0,18 EUR | 160 – 360 | 64 – 144 |
 | Hard tag targoncára (Confidex Steelwave Micro II) | 20 db | 15 – 30 EUR | 300 – 600 | 120 – 240 |
 | Hard tag gurulóeszközre (Confidex Ironside) | 50 db | 8 – 18 EUR | 400 – 900 | 160 – 360 |
-| Referencia/anchor tag | 30 db | 5 – 12 EUR | 150 – 360 | 60 – 144 |
+| Referencia/anchor tag (koordináta-kalibrációhoz, RTLS-nél kötelező) | 30 db | 5 – 12 EUR | 150 – 360 | 60 – 144 |
 | **Részösszeg: Induló tagkészlet** | | | **1 010 – 2 220** | **404 – 888** |
 
 #### Hálózati Infrastruktúra
@@ -59,11 +74,16 @@
 
 | Kategória | Min (EUR) | Max (EUR) | Min (HUF ezer) | Max (HUF ezer) |
 |---|---|---|---|---|
-| RFID olvasók + antennák | 14 000 | 21 100 | 5 600 | 8 440 |
+| Mennyezeti ATR7000 olvasók | 14 960 | 21 800 | 5 984 | 8 720 |
 | Induló tagkészlet | 1 010 | 2 220 | 404 | 888 |
 | Hálózati infrastruktúra | 2 300 | 4 600 | 920 | 1 840 |
 | Szerver és IT | 3 200 | 6 100 | 1 280 | 2 440 |
-| **HARDVER ÖSSZESEN** | **20 510** | **34 020** | **8 204** | **13 608** |
+| **HARDVER ÖSSZESEN** | **21 470** | **34 720** | **8 588** | **13 888** |
+
+> **Címkenyomtató**: ha RFID címkét is kódolni kell, a nyomtatónak RFID kivitelűnek
+> kell lennie (pl. Zebra ZT411 RFID). A sima ZT411 nem tud EPC-t írni; utólagos
+> RFID kit beszerelése jellemzően 700–1 200 EUR. Meglévő nyomtatónál a konfigurációs
+> címke kinyomtatása mutatja meg, van-e benne RFID modul.
 
 ---
 
@@ -87,10 +107,10 @@
 
 | Tétel | Becsült napok | Nap díj (EUR) min–max | Összesen (EUR) min–max | Összesen (HUF ezer) min–max |
 |---|---|---|---|---|
-| Site survey (helyszínfelmérés) | 1–2 nap | 600 – 1 000 EUR/nap | 600 – 2 000 | 240 – 800 |
+| Site survey (helyszínfelmérés) – mennyezeti felállásnál kötelező | 1–2 nap | 600 – 1 000 EUR/nap | 600 – 2 000 | 240 – 800 |
 | Fizikai telepítés (konzolok, kábelek, olvasók) | 3–5 nap | 400 – 700 EUR/nap | 1 200 – 3 500 | 480 – 1 400 |
 | Hálózati konfiguráció (switch, IP, VLAN) | 1 nap | 600 – 900 EUR/nap | 600 – 900 | 240 – 360 |
-| RFID olvasó konfiguráció és finomhangolás | 2–3 nap | 600 – 1 000 EUR/nap | 1 200 – 3 000 | 480 – 1 200 |
+| RFID olvasó konfiguráció, zónakalibráció és finomhangolás | 3–4 nap | 600 – 1 000 EUR/nap | 1 800 – 4 000 | 720 – 1 600 |
 | Szoftver telepítés és alap konfiguráció | 1–2 nap | 500 – 800 EUR/nap | 500 – 1 600 | 200 – 640 |
 | Integrációs teszt (UAT) | 2–3 nap | 500 – 800 EUR/nap | 1 000 – 2 400 | 400 – 960 |
 | **Részösszeg: Alap telepítés** | **10–16 nap** | | **5 100 – 13 400** | **2 040 – 5 360** |
@@ -108,7 +128,7 @@
 | Dokumentáció | 2–3 nap | 500 – 700 EUR/nap | 1 000 – 2 100 | 400 – 840 |
 | **Részösszeg: LN integráció** | **23–41 nap** | | **15 700 – 40 100** | **6 280 – 16 040** |
 
-> **Megjegyzés**: Az Infor LN integráció összetettsége az igényektől erősen függ. Ha csak egy egyszerű raktárhely-frissítési webhook elegendő, a kisebb érték reális. Ha teljes WMS ↔ ERP szinkronizáció (raklapmovement, inventory sync, GI/GR tranzakció) szükséges, a felső érték közelíthető.
+> **Megjegyzés**: Az Infor LN integráció összetettsége az igényektől erősen függ. Ha csak egy egyszerű raktárhely-frissítési webhook elegendő, a kisebb érték reális. Ha a teljes BOD-készlet kell (raklapmozgás, leltár-egyeztetés, GI/GR tranzakció), a felső érték közelíthető.
 
 ---
 
@@ -209,7 +229,7 @@ Az RFID RTLS rendszer az alábbi területeken hoz mérhető megtakarítást:
 
 ## 6. Fontos Megjegyzések és Kockázatok
 
-1. **Infor LN integráció a legnagyobb bizonytalansági faktor**: Az ERP integráció fejlesztési időigénye 23–41 napra becsült. Ha az Infor LN verzió idősebb (pl. 10.x vs 12.x), vagy ha az ION integrációs réteg nincs konfigurálva, a fejlesztési idő és cost jelentősen nőhet.
+1. **Infor LN integráció a legnagyobb bizonytalansági faktor**: Az LN integráció fejlesztési időigénye 23–41 napra becsült. Ha az Infor LN verzió idősebb (pl. 10.x vs 12.x), vagy ha az ION integrációs réteg nincs konfigurálva, a fejlesztési idő és cost jelentősen nőhet.
 
 2. **A szoftver ingyenes**: Jelen rendszer nyílt forráskódú, nincs licenszdíja. Ez komoly előny az üzleti RFID middleware megoldásokhoz képest (pl. Zebra Savanna, Impinj ItemSense).
 
